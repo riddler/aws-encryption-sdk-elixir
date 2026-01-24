@@ -242,37 +242,37 @@ mix docs
 mix hex.publish
 ```
 
-## Development Phases
+## Development Milestones
 
-### Phase 1: Core Foundation
+### Milestone 1: Core Foundation
 - [ ] Algorithm suite definitions
 - [ ] HKDF implementation
 - [ ] Message format serialization
 - [ ] Basic encryption/decryption (non-streaming)
 
-### Phase 2: Keyrings
+### Milestone 2: Keyrings
 - [ ] Keyring behaviour
 - [ ] Raw AES Keyring
 - [ ] Raw RSA Keyring
 - [ ] Multi-Keyring
 
-### Phase 3: CMM & Full API
+### Milestone 3: CMM & Full API
 - [ ] CMM behaviour
 - [ ] Default CMM
 - [ ] Encrypt API with commitment policy
 - [ ] Decrypt API with commitment policy
 
-### Phase 4: AWS Integration
+### Milestone 4: AWS Integration
 - [ ] AWS KMS Keyring
 - [ ] AWS KMS Discovery Keyring
 - [ ] AWS KMS MRK-aware keyrings
 
-### Phase 5: Advanced Features
+### Milestone 5: Advanced Features
 - [ ] Streaming encryption/decryption
 - [ ] Caching CMM
 - [ ] Required encryption context CMM
 
-### Phase 6: Validation
+### Milestone 6: Validation
 - [ ] Full test vector suite
 - [ ] Cross-SDK interoperability
 - [ ] Performance benchmarks
