@@ -40,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 9 test vector validation tests (manifest loading, parsing, key material)
 - Jason dependency for JSON parsing of test vector manifests
 - Test fixtures documentation with setup instructions
+- Basic encryption and decryption operations (#10)
+- AES-GCM encryption/decryption module with AAD support
+- EncryptionMaterials and DecryptionMaterials structs
+- Encrypt module with framed/non-framed message support
+- Decrypt module with header/body authentication
+- Key commitment verification for committed algorithm suites
+- Integration tests for encrypt/decrypt round-trips
+- AES KeyWrap test support module
 
 ### Changed
 - Updated CLAUDE.md to use "Milestones" terminology consistently
@@ -50,3 +58,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Credo consistency warnings for unused variable naming
+- Header serialization to properly separate version bytes from body
+- Frame deserialization error atom naming consistency

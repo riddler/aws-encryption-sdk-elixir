@@ -161,5 +161,27 @@ defmodule AwsEncryptionSdk.Format.BodyTest do
       assert {:error, {:sequence_mismatch, 2, 3}} =
                Body.deserialize_all_frames(data, frame_length)
     end
+
+    test "deserialize_frame/2 returns error for insufficient data" do
+      # Not enough data for a full frame
+      assert {:error, :invalid_frame_format} = Body.deserialize_frame(<<1, 2, 3>>, 100)
+    end
+
+    test "deserialize_all_frames/2 preserves trailing bytes" do
+      frame_length = 50
+      iv = :crypto.strong_rand_bytes(12)
+      auth_tag = :crypto.strong_rand_bytes(16)
+      trailing = <<99, 100, 101>>
+
+      data = Body.serialize_final_frame(1, iv, <<1, 2>>, auth_tag) <> trailing
+
+      assert {:ok, frames, ^trailing} = Body.deserialize_all_frames(data, frame_length)
+      assert length(frames) == 1
+    end
+
+    test "deserialize_non_framed/1 returns error for insufficient data" do
+      # Not enough data for IV + content length
+      assert {:error, :invalid_non_framed_body} = Body.deserialize_non_framed(<<1, 2, 3>>)
+    end
   end
 end

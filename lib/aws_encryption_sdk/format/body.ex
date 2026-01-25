@@ -248,7 +248,7 @@ defmodule AwsEncryptionSdk.Format.Body do
     end
   end
 
-  def deserialize_frame(_invalid, _frame_length), do: {:error, :invalid_frame}
+  def deserialize_frame(_invalid, _frame_length), do: {:error, :invalid_frame_format}
 
   @doc """
   Deserializes all frames from a framed body.

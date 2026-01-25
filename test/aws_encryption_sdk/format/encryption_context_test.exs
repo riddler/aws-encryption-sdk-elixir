@@ -76,5 +76,14 @@ defmodule AwsEncryptionSdk.Format.EncryptionContextTest do
 
       assert {:ok, ^context, <<99, 100>>} = EncryptionContext.deserialize(with_trailing)
     end
+
+    test "returns error for invalid format" do
+      # Invalid: starts with non-zero count but has no data
+      assert {:error, :invalid_encryption_context_format} = EncryptionContext.deserialize(<<1>>)
+    end
+
+    test "deserializes zero count correctly" do
+      assert {:ok, %{}, <<1, 2, 3>>} = EncryptionContext.deserialize(<<0::16-big, 1, 2, 3>>)
+    end
   end
 end

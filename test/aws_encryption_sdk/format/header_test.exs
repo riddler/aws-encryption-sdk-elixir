@@ -139,5 +139,63 @@ defmodule AwsEncryptionSdk.Format.HeaderTest do
       header = <<0x02, 0xFF, 0xFF, 0::800>>
       assert {:error, :unknown_suite_id} = Header.deserialize(header)
     end
+
+    test "returns error for insufficient data" do
+      # Just a version byte, not enough for a full header
+      assert {:error, :invalid_v2_header} = Header.deserialize(<<0x02>>)
+    end
+
+    test "returns error for truncated v1 header" do
+      # Start of v1 header but truncated
+      assert {:error, :invalid_v1_header} = Header.deserialize(<<0x01, 0x80, 0x00, 0x14>>)
+    end
+  end
+
+  describe "serialize_body/1" do
+    test "serializes v2 header body without auth tag" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      message_id = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "info", <<1, 2, 3>>)
+
+      header = %Header{
+        version: 2,
+        algorithm_suite: suite,
+        message_id: message_id,
+        encryption_context: %{},
+        encrypted_data_keys: [edk],
+        content_type: :framed,
+        frame_length: 4096,
+        algorithm_suite_data: :crypto.strong_rand_bytes(32),
+        header_iv: nil,
+        header_auth_tag: <<0::128>>
+      }
+
+      assert {:ok, body} = Header.serialize_body(header)
+      assert is_binary(body)
+      # Body should not include the version byte or auth tag
+      refute String.starts_with?(body, <<0x02>>)
+    end
+
+    test "serializes v1 header body without auth section" do
+      suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha256()
+      message_id = :crypto.strong_rand_bytes(16)
+      edk = EncryptedDataKey.new("provider", "info", <<1, 2, 3>>)
+
+      header = %Header{
+        version: 1,
+        algorithm_suite: suite,
+        message_id: message_id,
+        encryption_context: %{},
+        encrypted_data_keys: [edk],
+        content_type: :framed,
+        frame_length: 4096,
+        algorithm_suite_data: nil,
+        header_iv: :crypto.strong_rand_bytes(12),
+        header_auth_tag: <<0::128>>
+      }
+
+      assert {:ok, body} = Header.serialize_body(header)
+      assert is_binary(body)
+    end
   end
 end
