@@ -185,13 +185,31 @@ After structure approval:
 
 ### Validation Strategy
 Each phase includes specific test vectors to validate the implementation.
+Test vectors are validated using the harness at `test/support/test_vector_harness.ex`.
+
+Run test vector tests with: `mix test --only test_vectors`
 
 ### Test Vector Summary
 | Phase | Test Vectors | Purpose |
 |-------|--------------|---------|
-| 1 | `test-001`, `test-002` | Basic functionality |
-| 2 | `test-003`, `test-004` | Extended coverage |
-| 3 | `edge-001`, `negative-001` | Edge cases |
+| 1 | `[actual-ids-from-manifest]` | Basic functionality |
+| 2 | `[actual-ids-from-manifest]` | Extended coverage |
+| 3 | `[actual-ids-from-manifest]` | Edge cases and error conditions |
+
+### Harness Setup Pattern
+
+```elixir
+# In test file setup_all
+setup_all do
+  case TestVectorSetup.find_manifest("**/manifest.json") do
+    {:ok, manifest_path} ->
+      {:ok, harness} = TestVectorHarness.load_manifest(manifest_path)
+      {:ok, harness: harness}
+    :not_found ->
+      {:ok, harness: nil}
+  end
+end
+```
 
 ## Current State Analysis
 
@@ -225,10 +243,20 @@ Each phase includes specific test vectors to validate the implementation.
 - [Requirement from spec with link]
 
 ### Test Vectors for This Phase
+
 | Test ID | Description | Expected Result |
 |---------|-------------|-----------------|
-| `test-001` | Basic encrypt/decrypt | Success |
-| `test-002` | Different key size | Success |
+| `[actual-manifest-id]` | [from test.description] | Success |
+| `[actual-manifest-id]` | [from test.description] | Success |
+
+```elixir
+# Load and validate these specific tests
+for test_id <- ~w(actual-id-1 actual-id-2) do
+  {:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+  {:ok, expected} = TestVectorHarness.load_expected_plaintext(harness, test_id)
+  # ... validation logic
+end
+```
 
 ### Changes Required:
 
@@ -244,8 +272,8 @@ Each phase includes specific test vectors to validate the implementation.
 
 #### Automated Verification:
 - [ ] Tests pass: `mix quality --quick`
-- [ ] Test vector `test-001` passes
-- [ ] Test vector `test-002` passes
+- [ ] Test vectors pass: `mix test --only test_vectors`
+- [ ] Specific vectors validated: `[actual-test-id-1]`, `[actual-test-id-2]`
 
 #### Manual Verification:
 - [ ] Feature works as expected when tested in IEx
@@ -280,8 +308,37 @@ After all phases complete:
 - [Key edge cases]
 
 ### Test Vector Integration:
-- [How test vectors will be used]
-- [Which vectors validate which features]
+
+Test vectors are integrated using the harness infrastructure:
+
+```elixir
+# Module setup
+@moduletag :test_vectors
+@moduletag skip: not TestVectorSetup.vectors_available?()
+
+# Load harness in setup_all
+setup_all do
+  case TestVectorSetup.find_manifest("**/manifest.json") do
+    {:ok, manifest_path} ->
+      {:ok, harness} = TestVectorHarness.load_manifest(manifest_path)
+      {:ok, harness: harness}
+    :not_found ->
+      {:ok, harness: nil}
+  end
+end
+
+# Filter tests by criteria
+success_tests =
+  harness.tests
+  |> Enum.filter(fn {_id, test} -> test.result == :success end)
+
+# Load test data
+{:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+{:ok, expected} = TestVectorHarness.load_expected_plaintext(harness, test_id)
+```
+
+- Test vectors validate: [which features/requirements]
+- Run with: `mix test --only test_vectors`
 
 ### Manual Testing Steps:
 1. [Specific step to verify feature]
@@ -342,9 +399,11 @@ After all phases complete:
 
 4. **Include Test Vectors**:
    - Every phase should have specific test vectors to validate
+   - Use actual test IDs from the harness manifest (not placeholders)
    - Order test vectors by complexity (simple first)
-   - Include both positive and negative test cases
+   - Include both positive (`result: :success`) and negative (`result: :error`) test cases
    - Note which spec requirements each test vector validates
+   - Reference `mix test --only test_vectors` for running test vector tests
 
 5. **Be Practical**:
    - Focus on incremental, testable changes

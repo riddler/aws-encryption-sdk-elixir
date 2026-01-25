@@ -62,8 +62,8 @@ If you encounter a mismatch:
 
    Automated verification passed:
    - mix quality --quick: OK
-   - Test vector `test-001`: PASS
-   - Test vector `test-002`: PASS
+   - Test vectors: `mix test --only test_vectors` PASS
+   - Specific vectors validated: [list actual test IDs from plan]
 
    Please perform the manual verification steps listed in the plan:
    - [List manual verification items from the plan]
@@ -103,7 +103,9 @@ When something isn't working as expected:
 
 - First, make sure you've read and understood all the relevant code
 - Consider if the codebase has evolved since the plan was written
-- Check if test vectors are providing useful debugging information
+- Check if test vectors are providing useful debugging information:
+  - Use `TestVectorHarness.parse_ciphertext/1` to inspect message structure
+  - Use `TestVectorHarness.get_test/2` to see test case details and expected results
 - Present the mismatch clearly and ask for guidance
 
 Use sub-tasks sparingly - mainly for targeted debugging or exploring unfamiliar territory.
@@ -126,22 +128,58 @@ Plans include specific test vectors for each phase. Use them to:
 2. **Guide implementation**: If a test vector fails, it points to what needs fixing
 3. **Track progress**: Each passing test vector is concrete progress
 
-When implementing:
+### Test Vector Harness Usage
+
+Test vectors are accessed through the harness API:
 
 ```elixir
-# Example: Running a specific test vector
-test "passes test vector aes-256-gcm-001" do
-  # Load test vector data
-  ciphertext = File.read!("test/vectors/ciphertext-001")
-  expected_plaintext = File.read!("test/vectors/plaintext-001")
-  key = Base.decode64!("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=")
+alias AwsEncryptionSdk.TestSupport.TestVectorHarness
+alias AwsEncryptionSdk.TestSupport.TestVectorSetup
 
-  # Run decryption
+# Module setup for test vector tests
+@moduletag :test_vectors
+@moduletag skip: not TestVectorSetup.vectors_available?()
+
+setup_all do
+  case TestVectorSetup.find_manifest("**/manifest.json") do
+    {:ok, manifest_path} ->
+      {:ok, harness} = TestVectorHarness.load_manifest(manifest_path)
+      {:ok, harness: harness}
+    :not_found ->
+      {:ok, harness: nil}
+  end
+end
+
+# Example: Running a specific test vector
+test "passes test vector", %{harness: harness} do
+  test_id = "specific-test-id-from-manifest"
+
+  # Load test vector data via harness
+  {:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+  {:ok, expected_plaintext} = TestVectorHarness.load_expected_plaintext(harness, test_id)
+
+  # Get key material if needed
+  {:ok, test_case} = TestVectorHarness.get_test(harness, test_id)
+  [master_key | _] = test_case.master_keys
+  {:ok, key_data} = TestVectorHarness.get_key(harness, master_key["key"])
+  {:ok, raw_key} = TestVectorHarness.decode_key_material(key_data)
+
+  # Run decryption (when implemented)
   {:ok, plaintext} = AwsEncryptionSdk.decrypt(ciphertext, keyring: keyring)
 
   # Verify
   assert plaintext == expected_plaintext
 end
+```
+
+### Running Test Vector Tests
+
+```bash
+# Run all test vector tests
+mix test --only test_vectors
+
+# Run with verbose output
+mix test --only test_vectors --trace
 ```
 
 ## Doctest Guidelines

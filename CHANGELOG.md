@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated CLAUDE.md to use "Milestones" terminology consistently
+- Updated Claude commands to use test vector harness API (#17)
+- research_issue.md: Use TestVectorHarness instead of manual curl downloads
+- create_plan.md: Include harness setup patterns in plan templates
+- implement_plan.md: Replace File.read! examples with harness API calls
 
 ### Fixed
 - Credo consistency warnings for unused variable naming
