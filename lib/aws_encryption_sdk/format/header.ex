@@ -121,14 +121,14 @@ defmodule AwsEncryptionSdk.Format.Header do
   @spec serialize(t()) :: {:ok, binary()} | {:error, term()}
   def serialize(%__MODULE__{version: 2} = header) do
     with {:ok, body} <- serialize_v2_body(header) do
-      {:ok, body <> header.header_auth_tag}
+      {:ok, <<0x02>> <> body <> header.header_auth_tag}
     end
   end
 
   def serialize(%__MODULE__{version: 1} = header) do
     with {:ok, body} <- serialize_v1_body(header) do
       auth_section = <<header.header_iv::binary, header.header_auth_tag::binary>>
-      {:ok, body <> auth_section}
+      {:ok, <<0x01, 0x80>> <> body <> auth_section}
     end
   end
 
@@ -157,7 +157,6 @@ defmodule AwsEncryptionSdk.Format.Header do
 
       body =
         <<
-          0x02::8,
           header.algorithm_suite.id::16-big,
           header.message_id::binary-size(32),
           aad_length::16-big,
@@ -231,8 +230,6 @@ defmodule AwsEncryptionSdk.Format.Header do
 
       body =
         <<
-          0x01::8,
-          0x80::8,
           header.algorithm_suite.id::16-big,
           header.message_id::binary-size(16),
           aad_length::16-big,

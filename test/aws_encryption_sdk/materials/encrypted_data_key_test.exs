@@ -63,5 +63,31 @@ defmodule AwsEncryptionSdk.Materials.EncryptedDataKeyTest do
     test "rejects zero count in binary" do
       assert {:error, :empty_edk_list} = EncryptedDataKey.deserialize_list(<<0, 0>>)
     end
+
+    test "deserialize returns error for insufficient data" do
+      # Not enough data for a complete EDK
+      assert {:error, :invalid_edk_format} = EncryptedDataKey.deserialize(<<0, 5>>)
+    end
+
+    test "deserialize_list preserves trailing bytes" do
+      edk = EncryptedDataKey.new("test", "info", <<1, 2>>)
+      {:ok, serialized} = EncryptedDataKey.serialize_list([edk])
+      with_trailing = serialized <> <<99, 100>>
+
+      assert {:ok, [^edk], <<99, 100>>} = EncryptedDataKey.deserialize_list(with_trailing)
+    end
+
+    test "deserialize_list handles multiple EDKs correctly" do
+      edk1 = EncryptedDataKey.new("p1", "i1", <<1>>)
+      edk2 = EncryptedDataKey.new("p2", "i2", <<2>>)
+      edk3 = EncryptedDataKey.new("p3", "i3", <<3>>)
+
+      {:ok, serialized} = EncryptedDataKey.serialize_list([edk1, edk2, edk3])
+      assert {:ok, edks, <<>>} = EncryptedDataKey.deserialize_list(serialized)
+      assert length(edks) == 3
+      assert Enum.at(edks, 0) == edk1
+      assert Enum.at(edks, 1) == edk2
+      assert Enum.at(edks, 2) == edk3
+    end
   end
 end
