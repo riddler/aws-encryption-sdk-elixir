@@ -218,7 +218,7 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
     test "accessing deprecated suite logs warning" do
       log =
         capture_log(fn ->
-          {:ok, _} = AlgorithmSuite.by_id(0x0014)
+          {:ok, _suite} = AlgorithmSuite.by_id(0x0014)
         end)
 
       assert log =~ "deprecated"

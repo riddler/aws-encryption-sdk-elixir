@@ -33,6 +33,7 @@ defmodule AwsEncryptionSdk.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22.0", only: :dev},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:ex_quality, "~> 0.2.0", only: [:dev, :test]}
     ]
   end

@@ -487,7 +487,7 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
     {:ok, aes_128_gcm_iv12_tag16_no_kdf()}
   end
 
-  def by_id(_), do: {:error, :unknown_suite_id}
+  def by_id(_unknown_id), do: {:error, :unknown_suite_id}
 
   @doc """
   Returns true if the suite uses key commitment.
@@ -506,7 +506,7 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
   """
   @spec signed?(t()) :: boolean()
   def signed?(%__MODULE__{signature_algorithm: nil}), do: false
-  def signed?(%__MODULE__{signature_algorithm: _}), do: true
+  def signed?(%__MODULE__{signature_algorithm: _algorithm}), do: true
 
   @doc """
   Returns true if the suite can be used for encryption.
@@ -525,7 +525,7 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
   """
   @spec deprecated?(t()) :: boolean()
   def deprecated?(%__MODULE__{kdf_type: :identity}), do: true
-  def deprecated?(%__MODULE__{kdf_type: _}), do: false
+  def deprecated?(%__MODULE__{kdf_type: _kdf_type}), do: false
 
   @spec log_deprecation_warning(suite_id()) :: :ok
   defp log_deprecation_warning(suite_id) do

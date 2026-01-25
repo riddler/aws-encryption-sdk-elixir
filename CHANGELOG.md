@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Predicate functions (committed?, signed?, deprecated?, allows_encryption?)
 - Deprecation warnings for NO_KDF suites
 - Comprehensive test coverage (26 tests, 100% coverage)
+- HKDF key derivation implementation per RFC 5869 (#8)
+- Support for SHA-256, SHA-384, and SHA-512 hash algorithms
+- HKDF extract/expand/derive functions for key derivation
+- Comprehensive test suite with RFC 5869 and Wycheproof vectors
+- Algorithm suite compatibility tests for committed suites
+- ex_doc dependency for documentation generation
 
 ### Changed
 - Updated CLAUDE.md to use "Milestones" terminology consistently
+
+### Fixed
+- Credo consistency warnings for unused variable naming
