@@ -27,3 +27,6 @@ aws_encryption_sdk-*.tar
 
 # Local configuration and secrets
 .env
+
+# Test vectors (downloaded on-demand)
+/test/fixtures/test_vectors/

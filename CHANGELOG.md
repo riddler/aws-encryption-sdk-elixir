@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Footer serialization for ECDSA signatures
 - Complete message deserialization with automatic footer detection
 - 119 tests with 87.6% coverage
+- Test vector harness for AWS Encryption SDK compatibility testing (#13)
+- TestVectorHarness module for loading and parsing test vector manifests
+- Support for keys manifest version 3 and decrypt manifest versions 2, 3, 4
+- TestVectorSetup module with availability checks and setup instructions
+- ExUnit tests for message structure validation against test vectors
+- 9 test vector validation tests (manifest loading, parsing, key material)
+- Jason dependency for JSON parsing of test vector manifests
+- Test fixtures documentation with setup instructions
 
 ### Changed
 - Updated CLAUDE.md to use "Milestones" terminology consistently
