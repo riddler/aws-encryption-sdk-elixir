@@ -53,8 +53,13 @@ Launch these research tasks concurrently:
 4. **test-vector-researcher**: Find applicable test vectors
    ```
    Prompt: Find test vectors applicable to [feature].
-   List specific test vector IDs, organized by complexity.
-   Note which vectors should be implemented first.
+   Use the test vector harness at test/support/test_vector_harness.ex.
+
+   1. Check test/fixtures/test_vectors for available manifests
+   2. Load manifests with TestVectorHarness.load_manifest/1
+   3. Filter tests by algorithm suite or key type as needed
+   4. List specific test vector IDs from the manifest, organized by complexity
+   5. Note which vectors should be implemented first (prefer committed suites)
    ```
 
 ### Step 4: Synthesize Findings
@@ -112,38 +117,73 @@ Write to `thoughts/shared/research/YYYY-MM-DD-GHXXX-description.md`:
 
 ## Test Vectors
 
+### Harness Setup
+
+Test vectors are accessed via the test vector harness:
+
+```elixir
+# Check availability
+TestVectorSetup.vectors_available?()
+
+# Find and load manifest
+{:ok, manifest_path} = TestVectorSetup.find_manifest("**/manifest.json")
+{:ok, harness} = TestVectorHarness.load_manifest(manifest_path)
+
+# List available tests
+test_ids = TestVectorHarness.list_test_ids(harness)
+```
+
 ### Applicable Test Vector Sets
-- **awses-decrypt**: [description]
-- **awses-encrypt**: [description]
+- **awses-decrypt**: [description of decrypt vectors found]
+- Manifest version: [version from harness.manifest_version]
+- Total tests: [count from harness]
 
 ### Implementation Order
 
 #### Phase 1: Basic Implementation
-| Test ID | Algorithm | Description | Priority |
-|---------|-----------|-------------|----------|
-| `test-id-1` | 0x0478 | Simplest case | Start here |
-| `test-id-2` | 0x0478 | Variation | Second |
+| Test ID | Algorithm | Key Type | Priority |
+|---------|-----------|----------|----------|
+| `[actual-test-id]` | 0x0478 | AES-256 | Start here |
+| `[actual-test-id]` | 0x0478 | AES-256 | Second |
 
 #### Phase 2: Extended Coverage
-| Test ID | Algorithm | Description | Priority |
-|---------|-----------|-------------|----------|
-| `test-id-3` | 0x0578 | With ECDSA | After basic |
+| Test ID | Algorithm | Key Type | Priority |
+|---------|-----------|----------|----------|
+| `[actual-test-id]` | 0x0578 | AES-256 + ECDSA | After basic |
 
 #### Phase 3: Edge Cases
-| Test ID | Description | Expected |
-|---------|-------------|----------|
-| `edge-1` | Empty plaintext | Success |
-| `negative-1` | Wrong key | Error |
+| Test ID | Description | Expected Result |
+|---------|-------------|-----------------|
+| `[actual-test-id]` | [from test.description] | Success/Error |
 
-### Test Vector Details
+### Test Vector Setup
 
-**How to fetch**:
-```bash
-curl -O https://raw.githubusercontent.com/awslabs/aws-encryption-sdk-test-vectors/master/vectors/...
+If test vectors are not present, run:
+
+```elixir
+TestVectorSetup.ensure_test_vectors()
 ```
 
-**Key material needed**:
-[List keys from keys.json that are needed]
+This will print download instructions. Alternatively:
+
+```bash
+mkdir -p test/fixtures/test_vectors
+curl -L https://github.com/awslabs/aws-encryption-sdk-test-vectors/raw/master/vectors/awses-decrypt/python-2.3.0.zip -o /tmp/python-vectors.zip
+unzip /tmp/python-vectors.zip -d test/fixtures/test_vectors
+rm /tmp/python-vectors.zip
+```
+
+### Key Material
+
+Keys are loaded from the manifest's keys.json:
+
+```elixir
+# Get key metadata
+{:ok, key_data} = TestVectorHarness.get_key(harness, "aes-256-key-id")
+
+# Decode key material
+{:ok, raw_key} = TestVectorHarness.decode_key_material(key_data)
+```
 
 ## Implementation Considerations
 
