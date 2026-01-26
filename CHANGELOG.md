@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Codecov integration for coverage reporting
 - CI and coverage status badges in README
 - `:crypto` application to extra_applications for proper OTP loading
+- Keyring behaviour interface with on_encrypt/on_decrypt callbacks (#25)
+- Helper functions for data key generation and provider ID validation
+- Support for optional plaintext_data_key in materials structs
+- DecryptionMaterials.new_for_decrypt/3 and set_plaintext_data_key/2
+- EncryptionMaterials.new_for_encrypt/3, set_plaintext_data_key/2, and add_encrypted_data_key/2
+- Comprehensive test coverage for keyring behaviour (20 new tests)
 
 ### Changed
 - Minimum Elixir version requirement from 1.18 to 1.16
