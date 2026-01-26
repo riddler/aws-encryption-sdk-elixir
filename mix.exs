@@ -8,7 +8,7 @@ defmodule AwsEncryptionSdk.MixProject do
     [
       app: :aws_encryption_sdk,
       version: @version,
-      elixir: "~> 1.18",
+      elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       test_coverage: [tool: ExCoveralls],
@@ -32,7 +32,7 @@ defmodule AwsEncryptionSdk.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger, :crypto]
     ]
   end
 
