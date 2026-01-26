@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Raw RSA keyring implementation with encrypt/decrypt support (#27)
+- Support for all 5 padding schemes: PKCS1 v1.5, OAEP-SHA1/256/384/512
+- PEM key loading for X.509 SubjectPublicKeyInfo and PKCS#8 PrivateKeyInfo
+- wrap_key/2 function for encrypting data keys with RSA public keys
+- unwrap_key/3 function for decrypting EDKs with RSA private keys
+- Comprehensive unit tests (28 tests) and test vector validation (5 vectors)
+- Edge case tests for unicode key names and empty encryption contexts
+- MGF1 hash matching for OAEP padding per spec requirements
+- :public_key application to extra_applications for OTP loading
+
 ## [0.2.0] - 2026-01-25
 
 ### Added
