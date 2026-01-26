@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2025-01-12
+### Added
+- GitHub Actions CI workflow with multi-version testing matrix (#15)
+- Test matrix for Elixir 1.16-1.18 and OTP 26-27
+- Codecov integration for coverage reporting
+- CI and coverage status badges in README
+- `:crypto` application to extra_applications for proper OTP loading
+
+### Changed
+- Minimum Elixir version requirement from 1.18 to 1.16
+- Minimum OTP version requirement to 26
+
+## [0.1.0] - 2025-01-12
 
 ### Added
 - Apache License 2.0 (#20)

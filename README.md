@@ -4,6 +4,9 @@
 > The API is subject to change, and security audits have not been performed.
 > Use at your own risk in development/testing environments only.
 
+[![CI](https://github.com/riddler/aws-encryption-sdk-elixir/actions/workflows/ci.yml/badge.svg)](https://github.com/riddler/aws-encryption-sdk-elixir/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/riddler/aws-encryption-sdk-elixir/branch/main/graph/badge.svg)](https://codecov.io/gh/riddler/aws-encryption-sdk-elixir)
+
 # AWS Encryption SDK for Elixir
 
 An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/introduction.html), providing client-side encryption compatible with all other AWS Encryption SDK implementations (Python, Java, JavaScript, C, CLI).
@@ -87,8 +90,8 @@ decryption_materials = %DecryptionMaterials{
 
 ## Requirements
 
-- Elixir ~> 1.18
-- Erlang/OTP with `:crypto` application
+- Elixir 1.16 or later
+- Erlang/OTP 26 or later
 
 ## What's Next
 

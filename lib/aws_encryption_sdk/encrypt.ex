@@ -248,7 +248,7 @@ defmodule AwsEncryptionSdk.Encrypt do
 
   defp build_footer(%{signing_key: _key, algorithm_suite: suite}, _header, _body) do
     if AlgorithmSuite.signed?(suite) do
-      # TODO: Implement ECDSA signing
+      # TO DO: Implement ECDSA signing
       # For now, return error for signed suites without implementation
       {:error, :signature_not_implemented}
     else

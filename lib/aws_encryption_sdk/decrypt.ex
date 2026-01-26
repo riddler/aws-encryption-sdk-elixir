@@ -237,7 +237,7 @@ defmodule AwsEncryptionSdk.Decrypt do
   end
 
   defp verify_signature(_message, _materials) do
-    # TODO: Implement ECDSA signature verification
+    # TO DO: Implement ECDSA signature verification
     # For now, skip signature verification for signed suites
     # This will be implemented when we add ECDSA support
     :ok
