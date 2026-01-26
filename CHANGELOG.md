@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DecryptionMaterials.new_for_decrypt/3 and set_plaintext_data_key/2
 - EncryptionMaterials.new_for_encrypt/3, set_plaintext_data_key/2, and add_encrypted_data_key/2
 - Comprehensive test coverage for keyring behaviour (20 new tests)
+- Raw AES keyring implementation with AES-128/192/256 support (#26)
+- Provider info serialization for keyring metadata (key name, IV, tag length)
+- wrap_key/2 function for encrypting data keys with AES-GCM
+- unwrap_key/3 function for decrypting EDKs with provider ID and key name matching
+- Comprehensive unit tests (25 tests) and test vector validation (4 vectors)
+- Edge case tests for empty/large contexts, unicode, and all key sizes
 
 ### Changed
 - Minimum Elixir version requirement from 1.18 to 1.16
