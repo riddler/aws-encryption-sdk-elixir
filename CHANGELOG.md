@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-26
+
 ### Added
 - Multi-Keyring implementation for composing multiple keyrings (#28)
 - Support for generator keyring that generates plaintext data keys
@@ -108,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests for encrypt/decrypt round-trips
 - AES KeyWrap test support module
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/releases/tag/v0.1.0
