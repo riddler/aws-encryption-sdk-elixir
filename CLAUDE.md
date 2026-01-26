@@ -253,8 +253,8 @@ mix hex.publish
 ### Milestone 2: Keyrings
 - [x] Keyring behaviour
 - [x] Raw AES Keyring
-- [ ] Raw RSA Keyring
-- [ ] Multi-Keyring
+- [x] Raw RSA Keyring
+- [x] Multi-Keyring
 
 ### Milestone 3: CMM & Full API
 - [ ] CMM behaviour
