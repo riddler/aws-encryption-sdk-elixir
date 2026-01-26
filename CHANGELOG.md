@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-12
+
 ### Added
 - Apache License 2.0 (#20)
 - CONTRIBUTING.md with development setup and contribution guidelines (#20)
@@ -57,15 +59,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests for encrypt/decrypt round-trips
 - AES KeyWrap test support module
 
-### Changed
-- Updated CLAUDE.md milestone checkboxes to reflect completed Milestone 1
-- Updated CLAUDE.md to use "Milestones" terminology consistently
-- Updated Claude commands to use test vector harness API (#17)
-- research_issue.md: Use TestVectorHarness instead of manual curl downloads
-- create_plan.md: Include harness setup patterns in plan templates
-- implement_plan.md: Replace File.read! examples with harness API calls
-
-### Fixed
-- Credo consistency warnings for unused variable naming
-- Header serialization to properly separate version bytes from body
-- Frame deserialization error atom naming consistency
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/releases/tag/v0.1.0
