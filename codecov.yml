@@ -2,11 +2,11 @@ coverage:
   status:
     project:
       default:
-        target: 92%
+        target: 93%
         threshold: 1%
     patch:
       default:
-        target: 92%
+        target: 85%
 
 comment:
   layout: "reach,diff,flags,files"

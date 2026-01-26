@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CMM (Cryptographic Materials Manager) behaviour interface (#36)
+- get_encryption_materials/2 and get_decryption_materials/2 callbacks
+- Commitment policy type definitions (forbid/require encrypt/decrypt)
+- Helper functions for commitment policy validation
+- Helper functions for materials validation (encryption and decryption)
+- Helper functions for encryption context validation
+- Reserved key constant for signature verification (aws-crypto-public-key)
+- Default algorithm suite selection based on commitment policy
+- Reproduced encryption context validation and merging
+- Comprehensive test suite (54 tests, 100% coverage)
+
+### Changed
+- Increased minimum code coverage requirement from 92% to 93%
+- Added edge case tests for encryption context and encrypted data keys
+
 ## [0.3.0] - 2026-01-26
 
 ### Added

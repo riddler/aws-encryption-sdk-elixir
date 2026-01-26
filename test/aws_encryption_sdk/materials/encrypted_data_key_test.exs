@@ -89,5 +89,15 @@ defmodule AwsEncryptionSdk.Materials.EncryptedDataKeyTest do
       assert Enum.at(edks, 1) == edk2
       assert Enum.at(edks, 2) == edk3
     end
+
+    test "deserialize_list returns error for invalid format" do
+      # Only one byte - not enough for count
+      assert {:error, :invalid_edk_list_format} = EncryptedDataKey.deserialize_list(<<0>>)
+    end
+
+    test "deserialize_list returns error when EDK deserialization fails" do
+      # Count says 1 EDK, but not enough data
+      assert {:error, :invalid_edk_format} = EncryptedDataKey.deserialize_list(<<0, 1, 0, 5>>)
+    end
   end
 end
