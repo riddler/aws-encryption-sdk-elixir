@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default algorithm suite selection based on commitment policy
 - Reproduced encryption context validation and merging
 - Comprehensive test suite (54 tests, 100% coverage)
+- Default CMM implementation with keyring orchestration (#37)
+- ECDSA crypto module for P-384 key pair generation
+- Support for all 17 algorithm suites (signing and non-signing)
+- Algorithm suite selection based on commitment policy
+- Signing key generation for ECDSA algorithm suites
+- Public key encoding/storage in encryption context
+- Verification key extraction from encryption context
+- Reproduced encryption context validation and merging
+- Comprehensive test suite (25 unit tests, 4 error handling tests)
+- Round-trip encryption/decryption tests with signing suites
+- Multi-keyring integration tests
+- Test vector support framework (harness setup)
 
 ### Changed
 - Increased minimum code coverage requirement from 92% to 93%
