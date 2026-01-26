@@ -85,5 +85,11 @@ defmodule AwsEncryptionSdk.Format.EncryptionContextTest do
     test "deserializes zero count correctly" do
       assert {:ok, %{}, <<1, 2, 3>>} = EncryptionContext.deserialize(<<0::16-big, 1, 2, 3>>)
     end
+
+    test "returns error for incomplete entry data" do
+      # Count says 1 entry, but not enough data for complete key-value pair
+      assert {:error, :invalid_encryption_context_entry} =
+               EncryptionContext.deserialize(<<1::16-big, 0, 5>>)
+    end
   end
 end
