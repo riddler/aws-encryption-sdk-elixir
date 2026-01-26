@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Apache License 2.0 (#20)
+- CONTRIBUTING.md with development setup and contribution guidelines (#20)
+- Comprehensive README with project documentation for v0.1.0 release (#20)
+- WIP banner warning about pre-production status
+- Current status section listing implemented and planned features
+- Installation instructions for Hex.pm
+- Basic encryption/decryption usage example
+- Links to AWS Encryption SDK specification and related implementations
 - Initial project structure
 - Claude Code agents and commands for development workflow
 - Algorithm suite definitions for all 11 ESDK suites (#7)
@@ -50,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AES KeyWrap test support module
 
 ### Changed
+- Updated CLAUDE.md milestone checkboxes to reflect completed Milestone 1
 - Updated CLAUDE.md to use "Milestones" terminology consistently
 - Updated Claude commands to use test vector harness API (#17)
 - research_issue.md: Use TestVectorHarness instead of manual curl downloads
