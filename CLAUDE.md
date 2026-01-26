@@ -245,10 +245,10 @@ mix hex.publish
 ## Development Milestones
 
 ### Milestone 1: Core Foundation
-- [ ] Algorithm suite definitions
-- [ ] HKDF implementation
-- [ ] Message format serialization
-- [ ] Basic encryption/decryption (non-streaming)
+- [x] Algorithm suite definitions
+- [x] HKDF implementation
+- [x] Message format serialization
+- [x] Basic encryption/decryption (non-streaming)
 
 ### Milestone 2: Keyrings
 - [ ] Keyring behaviour
