@@ -251,8 +251,8 @@ mix hex.publish
 - [x] Basic encryption/decryption (non-streaming)
 
 ### Milestone 2: Keyrings
-- [ ] Keyring behaviour
-- [ ] Raw AES Keyring
+- [x] Keyring behaviour
+- [x] Raw AES Keyring
 - [ ] Raw RSA Keyring
 - [ ] Multi-Keyring
 
