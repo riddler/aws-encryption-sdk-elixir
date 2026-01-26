@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `/release` skill for automated version releases (#30)
 - GitHub Actions CI workflow with multi-version testing matrix (#15)
 - Test matrix for Elixir 1.16-1.18 and OTP 26-27
 - Codecov integration for coverage reporting
