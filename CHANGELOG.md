@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Multi-Keyring implementation for composing multiple keyrings (#28)
+- Support for generator keyring that generates plaintext data keys
+- Support for child keyrings that wrap existing data keys
+- wrap_key/2 function with generator + children chaining (fail-fast)
+- unwrap_key/3 function with sequential keyring iteration (first-success)
+- Comprehensive unit tests (31 tests) covering all edge cases
+- Test vector validation for all 7 multi-RSA test vectors
+- Nested multi-keyring support for complex key hierarchies
+- Error collection when all keyrings fail during decryption
 - Raw RSA keyring implementation with encrypt/decrypt support (#27)
 - Support for all 5 padding schemes: PKCS1 v1.5, OAEP-SHA1/256/384/512
 - PEM key loading for X.509 SubjectPublicKeyInfo and PKCS#8 PrivateKeyInfo
@@ -17,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Edge case tests for unicode key names and empty encryption contexts
 - MGF1 hash matching for OAEP padding per spec requirements
 - :public_key application to extra_applications for OTP loading
+
+### Changed
+- Increased minimum code coverage requirement from 90% to 92%
 
 ## [0.2.0] - 2026-01-25
 
