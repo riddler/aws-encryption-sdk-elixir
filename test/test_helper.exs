@@ -3,7 +3,9 @@ Code.require_file("support/test_vector_setup.ex", __DIR__)
 Code.require_file("support/test_vector_harness.ex", __DIR__)
 
 # Configure ExUnit
-ExUnit.configure(exclude: [:skip])
+# Exclude :skip and :integration by default
+# Run integration tests with: mix test --only integration
+ExUnit.configure(exclude: [:skip, :integration])
 
 ExUnit.start()
 
