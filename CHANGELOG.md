@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- KMS client abstraction layer with behaviour interface (#46)
+- KmsClient behaviour defining generate_data_key/5, encrypt/5, and decrypt/5 callbacks
+- Mock KMS client implementation for testing without AWS credentials
+- ExAws KMS client implementation for production use with AWS
+- ExAws configuration in config/config.exs with environment variable support
+- Integration test suite for real AWS KMS operations (9 tests)
+- Test documentation in test/README.md with setup and usage instructions
+- Manual verification script (scripts/verify_kms_client.exs)
+- Environment variable template (.env.example)
+- AWS SDK dependencies: ex_aws, ex_aws_kms, hackney, sweet_xml
+
 ## [0.4.0] - 2026-01-27
 
 ### Added

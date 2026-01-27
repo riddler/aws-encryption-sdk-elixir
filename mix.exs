@@ -39,6 +39,12 @@ defmodule AwsEncryptionSdk.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+
+      # AWS KMS client
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_kms, "~> 2.0"},
+      {:hackney, "~> 1.20"},
+      {:sweet_xml, "~> 0.7"},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:excoveralls, "~> 0.18.5", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
