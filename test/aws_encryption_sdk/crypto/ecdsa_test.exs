@@ -40,4 +40,73 @@ defmodule AwsEncryptionSdk.Crypto.ECDSATest do
       assert {:error, :invalid_base64} = ECDSA.decode_public_key("not-valid-base64!!!")
     end
   end
+
+  describe "sign/3" do
+    test "generates a signature" do
+      {private_key, _public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+
+      signature = ECDSA.sign(message, private_key, :secp384r1)
+
+      assert is_binary(signature)
+      assert byte_size(signature) > 0
+    end
+
+    test "generates different signatures for different messages" do
+      {private_key, _public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message1 = "test message 1"
+      message2 = "test message 2"
+
+      signature1 = ECDSA.sign(message1, private_key, :secp384r1)
+      signature2 = ECDSA.sign(message2, private_key, :secp384r1)
+
+      refute signature1 == signature2
+    end
+  end
+
+  describe "verify/4" do
+    test "verifies a valid signature" do
+      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+
+      signature = ECDSA.sign(message, private_key, :secp384r1)
+
+      assert ECDSA.verify(message, signature, public_key, :secp384r1)
+    end
+
+    test "rejects an invalid signature" do
+      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+
+      signature = ECDSA.sign(message, private_key, :secp384r1)
+
+      # Tamper with message
+      tampered_message = "tampered message"
+
+      refute ECDSA.verify(tampered_message, signature, public_key, :secp384r1)
+    end
+
+    test "rejects signature from different key" do
+      {private_key1, _public_key1} = ECDSA.generate_key_pair(:secp384r1)
+      {_private_key2, public_key2} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+
+      signature = ECDSA.sign(message, private_key1, :secp384r1)
+
+      refute ECDSA.verify(message, signature, public_key2, :secp384r1)
+    end
+
+    test "rejects tampered signature" do
+      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+
+      signature = ECDSA.sign(message, private_key, :secp384r1)
+
+      # Tamper with signature
+      <<first_byte, rest::binary>> = signature
+      tampered_signature = <<first_byte + 1, rest::binary>>
+
+      refute ECDSA.verify(message, tampered_signature, public_key, :secp384r1)
+    end
+  end
 end

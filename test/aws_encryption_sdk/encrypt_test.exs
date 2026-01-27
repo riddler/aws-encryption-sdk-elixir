@@ -2,6 +2,7 @@ defmodule AwsEncryptionSdk.EncryptTest do
   use ExUnit.Case, async: true
 
   alias AwsEncryptionSdk.AlgorithmSuite
+  alias AwsEncryptionSdk.Crypto.ECDSA
   alias AwsEncryptionSdk.Decrypt
   alias AwsEncryptionSdk.Encrypt
   alias AwsEncryptionSdk.Materials.DecryptionMaterials
@@ -39,7 +40,10 @@ defmodule AwsEncryptionSdk.EncryptTest do
       assert is_binary(result.ciphertext)
     end
 
-    test "rejects reserved encryption context keys" do
+    test "accepts reserved encryption context keys from CMM" do
+      # Note: Encrypt.encrypt no longer validates reserved keys because the CMM
+      # may legitimately add them (e.g., aws-crypto-public-key for signed suites).
+      # User-provided context validation happens at the Client layer.
       suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
       plaintext_data_key = :crypto.strong_rand_bytes(32)
       edk = EncryptedDataKey.new("test", "key", plaintext_data_key)
@@ -52,8 +56,9 @@ defmodule AwsEncryptionSdk.EncryptTest do
           plaintext_data_key
         )
 
-      assert {:error, {:reserved_keys, ["aws-crypto-public-key"]}} =
-               Encrypt.encrypt(materials, "test")
+      # Should succeed since CMM may have added this key
+      assert {:ok, result} = Encrypt.encrypt(materials, "test")
+      assert result.encryption_context["aws-crypto-public-key"] == "value"
     end
 
     test "rejects deprecated algorithm suite for encryption" do
@@ -148,6 +153,154 @@ defmodule AwsEncryptionSdk.EncryptTest do
         assert {:ok, dec_result} = Decrypt.decrypt(enc_result.ciphertext, dec_materials)
         assert dec_result.plaintext == plaintext, "Failed for size #{size}"
       end
+    end
+
+    test "round-trips with signed committed suite" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key_ecdsa_p384()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+      plaintext = "Test with signed suite"
+
+      # Generate signing key pair
+      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+
+      enc_materials =
+        EncryptionMaterials.new(
+          suite,
+          %{"purpose" => "signed"},
+          [edk],
+          plaintext_data_key,
+          signing_key: private_key
+        )
+
+      assert {:ok, enc_result} = Encrypt.encrypt(enc_materials, plaintext)
+
+      # Verify ciphertext has footer (signature)
+      assert byte_size(enc_result.ciphertext) > byte_size(plaintext)
+
+      # Create decryption materials with verification key
+      dec_materials =
+        DecryptionMaterials.new(
+          suite,
+          enc_result.encryption_context,
+          plaintext_data_key,
+          verification_key: public_key
+        )
+
+      assert {:ok, dec_result} = Decrypt.decrypt(enc_result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
+    end
+
+    test "round-trips with signed non-committed suite" do
+      suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha384_ecdsa_p384()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+      plaintext = "Legacy signed suite test"
+
+      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+
+      enc_materials =
+        EncryptionMaterials.new(
+          suite,
+          %{},
+          [edk],
+          plaintext_data_key,
+          signing_key: private_key
+        )
+
+      assert {:ok, enc_result} = Encrypt.encrypt(enc_materials, plaintext)
+
+      dec_materials =
+        DecryptionMaterials.new(suite, enc_result.encryption_context, plaintext_data_key,
+          verification_key: public_key
+        )
+
+      assert {:ok, dec_result} = Decrypt.decrypt(enc_result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
+    end
+  end
+
+  describe "frame length edge cases" do
+    test "encrypts with very small frame length" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+      plaintext = "Small frames test"
+
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      # Use very small frame length (1 byte per frame)
+      assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: 1)
+      assert is_binary(result.ciphertext)
+    end
+
+    test "encrypts with plaintext exactly matching frame length" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+
+      frame_length = 100
+      plaintext = :crypto.strong_rand_bytes(frame_length)
+
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
+
+      dec_materials = DecryptionMaterials.new(suite, %{}, plaintext_data_key)
+      assert {:ok, dec_result} = Decrypt.decrypt(result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
+    end
+
+    test "encrypts with plaintext one byte over frame length" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+
+      frame_length = 100
+      plaintext = :crypto.strong_rand_bytes(frame_length + 1)
+
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
+
+      dec_materials = DecryptionMaterials.new(suite, %{}, plaintext_data_key)
+      assert {:ok, dec_result} = Decrypt.decrypt(result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
+    end
+
+    test "encrypts with plaintext one byte under frame length" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+
+      frame_length = 100
+      plaintext = :crypto.strong_rand_bytes(frame_length - 1)
+
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
+
+      dec_materials = DecryptionMaterials.new(suite, %{}, plaintext_data_key)
+      assert {:ok, dec_result} = Decrypt.decrypt(result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
+    end
+
+    test "encrypts with multiple exact frames" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+
+      frame_length = 100
+      # Exactly 3 frames
+      plaintext = :crypto.strong_rand_bytes(frame_length * 3)
+
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
+
+      dec_materials = DecryptionMaterials.new(suite, %{}, plaintext_data_key)
+      assert {:ok, dec_result} = Decrypt.decrypt(result.ciphertext, dec_materials)
+      assert dec_result.plaintext == plaintext
     end
   end
 end

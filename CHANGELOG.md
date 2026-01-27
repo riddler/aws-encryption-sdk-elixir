@@ -30,10 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Round-trip encryption/decryption tests with signing suites
 - Multi-keyring integration tests
 - Test vector support framework (harness setup)
+- Client module with commitment policy enforcement (#38)
+- encrypt/3 and encrypt_with_keyring/3 APIs with policy validation
+- Support for three commitment policies per spec (forbid/require/allow)
+- Default policy of :require_encrypt_require_decrypt (strictest)
+- max_encrypted_data_keys configuration option
+- ECDSA sign/verify functions for signature operations
+- Round-trip encryption/decryption tests for signed suites
+- Client commitment policy test suite (47 tests, 100% coverage)
+- Client test vector validation (3 encrypt test cases)
 
 ### Changed
 - Increased minimum code coverage requirement from 92% to 93%
 - Added edge case tests for encryption context and encrypted data keys
+- Main API now recommends Client-based encryption workflow
+- Renamed encrypt/decrypt to encrypt_with_materials/decrypt_with_materials
+- Removed encryption context validation from Encrypt module
+- Updated documentation with Client usage examples
 
 ## [0.3.0] - 2026-01-26
 
