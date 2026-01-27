@@ -14,6 +14,7 @@ defmodule AwsEncryptionSdk.Encrypt do
 
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Crypto.AesGcm
+  alias AwsEncryptionSdk.Crypto.ECDSA
   alias AwsEncryptionSdk.Crypto.HKDF
   alias AwsEncryptionSdk.Format.Body
   alias AwsEncryptionSdk.Format.BodyAad
@@ -55,8 +56,10 @@ defmodule AwsEncryptionSdk.Encrypt do
       when is_binary(plaintext) do
     frame_length = Keyword.get(opts, :frame_length, @default_frame_length)
 
-    with :ok <- validate_encryption_context(materials.encryption_context),
-         :ok <- validate_algorithm_suite(materials.algorithm_suite),
+    # Note: We don't validate encryption context here because the CMM may have
+    # legitimately added reserved keys (e.g., aws-crypto-public-key for signed suites).
+    # User-provided context validation should happen at the Client/CMM layer.
+    with :ok <- validate_algorithm_suite(materials.algorithm_suite),
          {:ok, message_id} <- generate_message_id(materials.algorithm_suite),
          {:ok, derived_key, commitment_key} <- derive_keys(materials, message_id),
          {:ok, header} <- build_header(materials, message_id, frame_length, commitment_key),
@@ -75,11 +78,6 @@ defmodule AwsEncryptionSdk.Encrypt do
          algorithm_suite: materials.algorithm_suite
        }}
     end
-  end
-
-  # Validate encryption context doesn't have reserved prefix
-  defp validate_encryption_context(context) do
-    EncryptionContext.validate(context)
   end
 
   # Validate algorithm suite is allowed for encryption
@@ -246,11 +244,20 @@ defmodule AwsEncryptionSdk.Encrypt do
     {:ok, <<>>}
   end
 
-  defp build_footer(%{signing_key: _key, algorithm_suite: suite}, _header, _body) do
+  defp build_footer(%{signing_key: private_key, algorithm_suite: suite}, header, body) do
     if AlgorithmSuite.signed?(suite) do
-      # TO DO: Implement ECDSA signing
-      # For now, return error for signed suites without implementation
-      {:error, :signature_not_implemented}
+      # Serialize header to binary for signing
+      {:ok, header_binary} = Header.serialize(header)
+
+      # Sign header + body
+      message_to_sign = header_binary <> body
+      signature = ECDSA.sign(message_to_sign, private_key, :secp384r1)
+
+      # Footer format: signature_length (2 bytes) + signature
+      signature_length = byte_size(signature)
+      footer = <<signature_length::16-big, signature::binary>>
+
+      {:ok, footer}
     else
       {:ok, <<>>}
     end

@@ -72,4 +72,61 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
       :error -> {:error, :invalid_base64}
     end
   end
+
+  @doc """
+  Generates an ECDSA signature over the given message using SHA-384.
+
+  ## Parameters
+
+  - `message` - Binary data to sign
+  - `private_key` - Raw private key bytes (48 bytes for P-384)
+  - `curve` - Elliptic curve to use (`:secp384r1`)
+
+  ## Returns
+
+  - DER-encoded ECDSA signature
+
+  ## Examples
+
+      iex> {private_key, _public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
+      iex> message = "test message"
+      iex> signature = AwsEncryptionSdk.Crypto.ECDSA.sign(message, private_key, :secp384r1)
+      iex> is_binary(signature)
+      true
+
+  """
+  @spec sign(binary(), binary(), curve()) :: binary()
+  def sign(message, private_key, :secp384r1) when is_binary(message) and is_binary(private_key) do
+    :crypto.sign(:ecdsa, :sha384, message, [private_key, :secp384r1])
+  end
+
+  @doc """
+  Verifies an ECDSA signature over the given message using SHA-384.
+
+  ## Parameters
+
+  - `message` - Binary data that was signed
+  - `signature` - DER-encoded ECDSA signature
+  - `public_key` - Raw public key bytes (97 bytes uncompressed point for P-384)
+  - `curve` - Elliptic curve to use (`:secp384r1`)
+
+  ## Returns
+
+  - `true` if signature is valid
+  - `false` if signature is invalid
+
+  ## Examples
+
+      iex> {private_key, public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
+      iex> message = "test message"
+      iex> signature = AwsEncryptionSdk.Crypto.ECDSA.sign(message, private_key, :secp384r1)
+      iex> AwsEncryptionSdk.Crypto.ECDSA.verify(message, signature, public_key, :secp384r1)
+      true
+
+  """
+  @spec verify(binary(), binary(), binary(), curve()) :: boolean()
+  def verify(message, signature, public_key, :secp384r1)
+      when is_binary(message) and is_binary(signature) and is_binary(public_key) do
+    :crypto.verify(:ecdsa, :sha384, message, signature, [public_key, :secp384r1])
+  end
 end
