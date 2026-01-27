@@ -257,10 +257,10 @@ mix hex.publish
 - [x] Multi-Keyring
 
 ### Milestone 3: CMM & Full API
-- [ ] CMM behaviour
-- [ ] Default CMM
-- [ ] Encrypt API with commitment policy
-- [ ] Decrypt API with commitment policy
+- [x] CMM behaviour
+- [x] Default CMM
+- [x] Encrypt API with commitment policy
+- [x] Decrypt API with commitment policy
 
 ### Milestone 4: AWS Integration
 - [ ] AWS KMS Keyring

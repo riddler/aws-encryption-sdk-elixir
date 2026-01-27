@@ -13,7 +13,7 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 
 ## Current Status
 
-**Version**: 0.3.0 (pre-release)
+**Version**: 0.4.0 (pre-release)
 
 ### Implemented Features
 
@@ -28,18 +28,20 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 - ✅ Raw AES keyring
 - ✅ Raw RSA keyring (all 5 padding schemes)
 - ✅ Multi-keyring composition
+- ✅ Cryptographic Materials Manager (CMM) with Default implementation
+- ✅ Client module with commitment policy enforcement
+- ✅ ECDSA signing for signed algorithm suites (P-384)
+- ✅ Support for all 17 algorithm suites
 
 ### Not Yet Implemented
 
 - ❌ AWS KMS keyring
-- ❌ Cryptographic Materials Manager (CMM)
 - ❌ Streaming encryption/decryption
-- ❌ ECDSA signing for signed algorithm suites
 
 ### Test Coverage
 
-- 312 tests passing
-- 92.1% code coverage
+- 469 tests passing
+- 93.8% code coverage
 
 ## Installation
 
@@ -48,7 +50,7 @@ Add `aws_encryption_sdk` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:aws_encryption_sdk, "~> 0.3.0"}
+    {:aws_encryption_sdk, "~> 0.4.0"}
   ]
 end
 ```
