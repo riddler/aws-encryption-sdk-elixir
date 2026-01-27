@@ -26,14 +26,16 @@ defmodule AwsEncryptionSdk do
     encryption_context: %{"purpose" => "example"}
   )
 
-  # Decrypt (when Client.decrypt is implemented)
-  # {:ok, plaintext} = AwsEncryptionSdk.decrypt(client, result.ciphertext)
+  # Decrypt
+  {:ok, decrypt_result} = AwsEncryptionSdk.decrypt(client, result.ciphertext)
   ```
 
   ## Client-Based API
 
   - `encrypt/3` - Encrypts plaintext using client configuration
-  - `encrypt_with_keyring/3` - Convenience function with keyring
+  - `decrypt/3` - Decrypts ciphertext using client configuration
+  - `encrypt_with_keyring/3` - Convenience function for encryption with keyring
+  - `decrypt_with_keyring/3` - Convenience function for decryption with keyring
 
   ## Materials-Based API (Advanced)
 
@@ -192,24 +194,77 @@ defmodule AwsEncryptionSdk do
   @doc """
   Decrypts an AWS Encryption SDK message.
 
-  For backward compatibility, accepts DecryptionMaterials as the second argument
-  (delegates to `decrypt_with_materials/2`).
-
-  In the future, will accept a Client as the first argument for policy enforcement.
+  Accepts either a Client (recommended) or DecryptionMaterials (advanced use).
 
   ## Parameters
 
-  - `ciphertext` - Complete encrypted message
-  - `materials` - Decryption materials containing the plaintext data key
+  - `client_or_ciphertext` - Either:
+    - `%Client{}` - Client with CMM and commitment policy (recommended)
+    - `ciphertext` - Complete encrypted message (for materials-based API)
+  - `ciphertext_or_materials` - Either:
+    - `ciphertext` - Complete encrypted message (when first arg is Client)
+    - `%DecryptionMaterials{}` - Pre-assembled materials (advanced)
+  - `opts` - Options (only used with Client):
+    - `:encryption_context` - Reproduced context to validate
 
   ## Returns
 
   - `{:ok, result}` - Decryption succeeded
   - `{:error, reason}` - Decryption failed
+
+  ## Examples
+
+      # With Client (recommended)
+      keyring = create_keyring()
+      cmm = Cmm.Default.new(keyring)
+      client = Client.new(cmm)
+
+      {:ok, result} = AwsEncryptionSdk.decrypt(client, ciphertext)
+
+      # With materials (advanced, backward compatibility)
+      materials = create_materials()
+      {:ok, result} = AwsEncryptionSdk.decrypt(ciphertext, materials)
+
   """
+  @spec decrypt(Client.t(), binary(), Client.decrypt_opts()) ::
+          {:ok, AwsEncryptionSdk.Decrypt.decrypt_result()} | {:error, term()}
   @spec decrypt(binary(), AwsEncryptionSdk.Materials.DecryptionMaterials.t()) ::
           {:ok, AwsEncryptionSdk.Decrypt.decrypt_result()} | {:error, term()}
-  def decrypt(ciphertext, materials) do
+  @spec decrypt(binary(), AwsEncryptionSdk.Materials.DecryptionMaterials.t(), keyword()) ::
+          {:ok, AwsEncryptionSdk.Decrypt.decrypt_result()} | {:error, term()}
+  def decrypt(client_or_ciphertext, ciphertext_or_materials, opts \\ [])
+
+  def decrypt(%Client{} = client, ciphertext, opts) when is_binary(ciphertext) do
+    Client.decrypt(client, ciphertext, opts)
+  end
+
+  def decrypt(ciphertext, %AwsEncryptionSdk.Materials.DecryptionMaterials{} = materials, _opts)
+      when is_binary(ciphertext) do
     decrypt_with_materials(ciphertext, materials)
   end
+
+  @doc """
+  Decrypts ciphertext using a keyring directly.
+
+  Convenience function that creates a Default CMM and Client automatically.
+
+  ## Parameters
+
+  - `keyring` - A keyring struct (RawAes, RawRsa, or Multi)
+  - `ciphertext` - Complete encrypted message
+  - `opts` - Options:
+    - `:commitment_policy` - Override default policy
+    - `:max_encrypted_data_keys` - Override default limit
+    - `:encryption_context` - Reproduced context to validate
+
+  ## Examples
+
+      keyring = RawAes.new("ns", "key", key_bytes, :aes_256_gcm)
+
+      {:ok, result} = AwsEncryptionSdk.decrypt_with_keyring(keyring, ciphertext,
+        commitment_policy: :require_encrypt_allow_decrypt
+      )
+
+  """
+  defdelegate decrypt_with_keyring(keyring, ciphertext, opts \\ []), to: Client
 end
