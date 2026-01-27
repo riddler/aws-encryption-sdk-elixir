@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Round-trip encryption/decryption tests for signed suites
 - Client commitment policy test suite (47 tests, 100% coverage)
 - Client test vector validation (3 encrypt test cases)
+- Client.decrypt/3 with commitment policy enforcement for decryption (#39)
+- Client.decrypt_with_keyring/3 convenience function for keyring-based decryption
+- AwsEncryptionSdk.decrypt/2-3 public API accepting Client or DecryptionMaterials
+- AwsEncryptionSdk.decrypt_with_keyring/3 public API delegation
+- Commitment policy validation during decryption (strictest policy rejects non-committed suites)
+- EDK count limit enforcement during decryption (max_encrypted_data_keys)
+- Comprehensive integration test suite with 9 tests covering all three commitment policies
+- 16 new tests for Client-based and public API decryption (469 total tests, 93.8% coverage)
 
 ### Changed
 - Increased minimum code coverage requirement from 92% to 93%

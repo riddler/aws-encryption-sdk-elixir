@@ -199,13 +199,200 @@ defmodule AwsEncryptionSdk.ClientTest do
     end
   end
 
+  describe "decrypt/3" do
+    test "decrypts with require_encrypt_require_decrypt policy and committed suite" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+      client = Client.new(cmm)
+      plaintext = "Test message"
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      # Encrypt
+      {:ok, enc_result} = Client.encrypt(client, plaintext, algorithm_suite: suite)
+
+      # Decrypt should succeed
+      assert {:ok, dec_result} = Client.decrypt(client, enc_result.ciphertext)
+      assert dec_result.plaintext == plaintext
+      assert dec_result.encryption_context == %{}
+    end
+
+    test "rejects non-committed suite with require_encrypt_require_decrypt policy" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+
+      # Encrypt with forbid policy (only way to get non-committed suite)
+      forbid_client = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+      non_committed_suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha256()
+
+      {:ok, enc_result} =
+        Client.encrypt(forbid_client, "test", algorithm_suite: non_committed_suite)
+
+      # Decrypt with strict policy should fail
+      strict_client = Client.new(cmm, commitment_policy: :require_encrypt_require_decrypt)
+
+      assert {:error, :commitment_policy_requires_committed_suite} =
+               Client.decrypt(strict_client, enc_result.ciphertext)
+    end
+
+    test "accepts both suite types with require_encrypt_allow_decrypt policy" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+
+      # Encrypt with committed suite using require_allow policy
+      require_allow_client = Client.new(cmm, commitment_policy: :require_encrypt_allow_decrypt)
+      committed_suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      {:ok, enc1} =
+        Client.encrypt(require_allow_client, "test1", algorithm_suite: committed_suite)
+
+      # Encrypt with non-committed suite using forbid policy
+      forbid_client = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+      non_committed_suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha256()
+      {:ok, enc2} = Client.encrypt(forbid_client, "test2", algorithm_suite: non_committed_suite)
+
+      # Decrypt both with require_allow policy (should accept both)
+      assert {:ok, dec1} = Client.decrypt(require_allow_client, enc1.ciphertext)
+      assert dec1.plaintext == "test1"
+
+      assert {:ok, dec2} = Client.decrypt(require_allow_client, enc2.ciphertext)
+      assert dec2.plaintext == "test2"
+    end
+
+    test "accepts both suite types with forbid_encrypt_allow_decrypt policy" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+
+      # Encrypt with different policies to get both suite types
+      committed_suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      non_committed_suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha256()
+
+      require_client = Client.new(cmm, commitment_policy: :require_encrypt_allow_decrypt)
+      {:ok, enc1} = Client.encrypt(require_client, "test1", algorithm_suite: committed_suite)
+
+      forbid_encrypt_client = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+
+      {:ok, enc2} =
+        Client.encrypt(forbid_encrypt_client, "test2", algorithm_suite: non_committed_suite)
+
+      # Decrypt both with forbid_allow policy
+      forbid_client = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+      assert {:ok, dec1} = Client.decrypt(forbid_client, enc1.ciphertext)
+      assert dec1.plaintext == "test1"
+
+      assert {:ok, dec2} = Client.decrypt(forbid_client, enc2.ciphertext)
+      assert dec2.plaintext == "test2"
+    end
+
+    test "rejects messages exceeding max_encrypted_data_keys limit" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+      client = Client.new(cmm)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      {:ok, enc_result} = Client.encrypt(client, "test", algorithm_suite: suite)
+
+      # Create client with max_edks = 0 (will reject any message)
+      strict_client = Client.new(cmm, max_encrypted_data_keys: 0)
+
+      assert {:error, :too_many_encrypted_data_keys} =
+               Client.decrypt(strict_client, enc_result.ciphertext)
+    end
+
+    test "accepts messages within max_encrypted_data_keys limit" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+      client = Client.new(cmm)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      {:ok, enc_result} = Client.encrypt(client, "test", algorithm_suite: suite)
+
+      # Create client with max_edks = 10 (message has 1 EDK)
+      lenient_client = Client.new(cmm, max_encrypted_data_keys: 10)
+
+      assert {:ok, dec_result} = Client.decrypt(lenient_client, enc_result.ciphertext)
+      assert dec_result.plaintext == "test"
+    end
+
+    test "validates reproduced encryption context matches" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+      client = Client.new(cmm)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      context = %{"key" => "value"}
+
+      {:ok, enc_result} =
+        Client.encrypt(client, "test", encryption_context: context, algorithm_suite: suite)
+
+      # Should succeed with matching context
+      assert {:ok, dec_result} =
+               Client.decrypt(client, enc_result.ciphertext, encryption_context: context)
+
+      assert dec_result.plaintext == "test"
+    end
+
+    test "fails when reproduced encryption context mismatches" do
+      keyring = create_test_keyring()
+      cmm = Default.new(keyring)
+      client = Client.new(cmm)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      context = %{"key" => "value"}
+
+      {:ok, enc_result} =
+        Client.encrypt(client, "test", encryption_context: context, algorithm_suite: suite)
+
+      # Should fail with mismatched context
+      wrong_context = %{"key" => "wrong"}
+
+      assert {:error, {:encryption_context_mismatch, "key"}} =
+               Client.decrypt(client, enc_result.ciphertext, encryption_context: wrong_context)
+    end
+  end
+
+  describe "decrypt_with_keyring/3" do
+    test "decrypts using keyring directly" do
+      keyring = create_test_keyring()
+      plaintext = "test data"
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      {:ok, enc_result} = Client.encrypt_with_keyring(keyring, plaintext, algorithm_suite: suite)
+
+      {:ok, dec_result} = Client.decrypt_with_keyring(keyring, enc_result.ciphertext)
+
+      assert dec_result.plaintext == plaintext
+    end
+
+    test "accepts custom commitment policy" do
+      keyring = create_test_keyring()
+      plaintext = "test"
+
+      # Encrypt with non-committed suite
+      non_committed_suite = AlgorithmSuite.aes_256_gcm_iv12_tag16_hkdf_sha256()
+
+      {:ok, enc_result} =
+        Client.encrypt_with_keyring(keyring, plaintext,
+          commitment_policy: :forbid_encrypt_allow_decrypt,
+          algorithm_suite: non_committed_suite
+        )
+
+      # Decrypt with lenient policy should succeed
+      {:ok, dec_result} =
+        Client.decrypt_with_keyring(keyring, enc_result.ciphertext,
+          commitment_policy: :require_encrypt_allow_decrypt
+        )
+
+      assert dec_result.plaintext == plaintext
+      refute AlgorithmSuite.committed?(dec_result.header.algorithm_suite)
+    end
+  end
+
   describe "encrypt/decrypt round-trip" do
-    test "round-trips with client encryption" do
+    test "round-trips with client encryption and decryption" do
       keyring = create_test_keyring()
       cmm = Default.new(keyring)
       client = Client.new(cmm)
       plaintext = "Test message for round-trip"
-      # Use non-signed suite until ECDSA is implemented
       suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
 
       # Encrypt with client
@@ -215,9 +402,12 @@ defmodule AwsEncryptionSdk.ClientTest do
           algorithm_suite: suite
         )
 
-      # For now, just verify encryption succeeded
-      assert is_binary(enc_result.ciphertext)
-      assert byte_size(enc_result.ciphertext) > byte_size(plaintext)
+      # Decrypt with client
+      {:ok, dec_result} = Client.decrypt(client, enc_result.ciphertext)
+
+      assert dec_result.plaintext == plaintext
+      assert dec_result.encryption_context == %{"context" => "value"}
+      assert AlgorithmSuite.committed?(dec_result.header.algorithm_suite)
     end
   end
 
