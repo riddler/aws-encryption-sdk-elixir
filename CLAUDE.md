@@ -263,9 +263,9 @@ mix hex.publish
 - [x] Decrypt API with commitment policy
 
 ### Milestone 4: AWS Integration
-- [ ] AWS KMS Keyring
-- [ ] AWS KMS Discovery Keyring
-- [ ] AWS KMS MRK-aware keyrings
+- [x] AWS KMS Keyring
+- [x] AWS KMS Discovery Keyring
+- [x] AWS KMS MRK-aware keyrings
 
 ### Milestone 5: Advanced Features
 - [ ] Streaming encryption/decryption
