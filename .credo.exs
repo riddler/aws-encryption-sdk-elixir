@@ -22,12 +22,11 @@
         # In the latter case `**/*.{ex,exs}` will be used.
         #
         included: [
-          "examples/",
           "lib/",
           "src/",
           "test/"
         ],
-        excluded: [~r"/lib/mix", ~r"/_build/", ~r"/deps/", ~r"/node_modules/"]
+        excluded: [~r"/lib/mix", ~r"/_build/", ~r"/deps/", ~r"/node_modules/", ~r"/examples/"]
       },
       #
       # Load and configure plugins here:

@@ -2,29 +2,139 @@ defmodule AwsEncryptionSdk.Keyring.AwsKmsDiscovery do
   @moduledoc """
   AWS KMS Discovery Keyring implementation.
 
-  A decrypt-only keyring that can decrypt data keys encrypted by any AWS KMS key
-  the caller has access to. Unlike the standard AWS KMS Keyring, this keyring does
-  not have a pre-configured key ID - it extracts the key ARN from each EDK's
-  provider info.
+  A decrypt-only keyring that can decrypt data encrypted with ANY KMS key
+  the caller has access to. Unlike the standard `AwsKms` keyring, this keyring
+  does not require knowing the key ARN in advance.
 
-  ## Example
+  ## Use Cases
 
-      {:ok, client} = KmsClient.ExAws.new(region: "us-west-2")
-      {:ok, keyring} = AwsKmsDiscovery.new(client)
+  - **Decryption services**: Services that decrypt data from multiple sources
+  - **Migration**: Decrypt data while transitioning between KMS keys
+  - **Flexible decryption**: When the encrypting key is not known at decrypt time
 
-      # Decrypt with any accessible KMS key
-      {:ok, materials} = AwsKmsDiscovery.unwrap_key(keyring, materials, edks)
+  ## Security Warning
+
+  Discovery keyrings will attempt to decrypt using ANY KMS key ARN found in
+  the encrypted data keys. Use a discovery filter to restrict which keys
+  can be used:
+
+  ```elixir
+  {:ok, keyring} = AwsKmsDiscovery.new(client,
+    discovery_filter: %{
+      partition: "aws",
+      accounts: ["123456789012"]  # Only allow keys from this account
+    }
+  )
+  ```
+
+  ## Operations
+
+  ### Encryption
+
+  Discovery keyrings **cannot encrypt**. `wrap_key/2` always returns
+  `{:error, :discovery_keyring_cannot_encrypt}`.
+
+  For encryption, use:
+  - `AwsKms` keyring if you know the key ARN
+  - `Multi` keyring with an `AwsKms` generator for encryption + discovery for decryption
+
+  ### Decryption (unwrap_key)
+
+  1. Filters EDKs by provider ID "aws-kms"
+  2. Validates each EDK's key ARN format
+  3. Applies discovery filter (if configured)
+  4. Attempts KMS Decrypt using the ARN from each EDK
+  5. Returns on first successful decryption
 
   ## Discovery Filter
 
-  Optionally restrict which keys can be used for decryption:
+  Restrict which KMS keys can be used for decryption:
 
-      {:ok, keyring} = AwsKmsDiscovery.new(client,
-        discovery_filter: %{
-          partition: "aws",
-          accounts: ["123456789012", "987654321098"]
-        }
-      )
+  | Field | Description | Required |
+  |-------|-------------|----------|
+  | `partition` | AWS partition ("aws", "aws-cn", "aws-us-gov") | Yes |
+  | `accounts` | List of allowed AWS account IDs | Yes |
+
+  ## IAM Permissions Required
+
+  The principal needs `kms:Decrypt` on ALL keys that might be encountered:
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": "kms:Decrypt",
+    "Resource": [
+      "arn:aws:kms:*:123456789012:key/*",
+      "arn:aws:kms:*:987654321098:key/*"
+    ]
+  }
+  ```
+
+  Or use a condition to limit to specific accounts:
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": "kms:Decrypt",
+    "Resource": "*",
+    "Condition": {
+      "StringEquals": {
+        "kms:CallerAccount": ["123456789012", "987654321098"]
+      }
+    }
+  }
+  ```
+
+  ## Examples
+
+  ### Basic Discovery Decryption
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.AwsKmsDiscovery
+  alias AwsEncryptionSdk.Keyring.KmsClient.ExAws
+  alias AwsEncryptionSdk.Cmm.Default
+  alias AwsEncryptionSdk.Client
+
+  # Create discovery keyring
+  {:ok, kms_client} = ExAws.new(region: "us-west-2")
+  {:ok, keyring} = AwsKmsDiscovery.new(kms_client)
+
+  # Create client
+  cmm = Default.new(keyring)
+  client = Client.new(cmm)
+
+  # Decrypt data (encrypted with any accessible KMS key)
+  {:ok, {plaintext, context}} = Client.decrypt(client, ciphertext)
+  ```
+
+  ### With Discovery Filter (Recommended)
+
+  ```elixir
+  {:ok, keyring} = AwsKmsDiscovery.new(kms_client,
+    discovery_filter: %{
+      partition: "aws",
+      accounts: ["123456789012", "987654321098"]
+    }
+  )
+  ```
+
+  ### Encrypt with KMS, Decrypt with Discovery
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.{AwsKms, AwsKmsDiscovery, Multi}
+
+  # Encryption keyring - knows the key
+  {:ok, encrypt_keyring} = AwsKms.new("arn:aws:kms:us-west-2:123:key/abc", kms_client)
+
+  # Decryption keyring - discovery mode
+  {:ok, decrypt_keyring} = AwsKmsDiscovery.new(kms_client,
+    discovery_filter: %{partition: "aws", accounts: ["123456789012"]}
+  )
+
+  # Use different clients for encrypt vs decrypt
+  encrypt_client = Client.new(Default.new(encrypt_keyring))
+  decrypt_client = Client.new(Default.new(decrypt_keyring))
+  ```
 
   ## Spec Reference
 

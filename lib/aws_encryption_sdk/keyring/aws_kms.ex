@@ -2,19 +2,152 @@ defmodule AwsEncryptionSdk.Keyring.AwsKms do
   @moduledoc """
   AWS KMS Keyring implementation.
 
-  Encrypts and decrypts data keys using AWS KMS. This keyring can:
-  - Generate new data keys using KMS GenerateDataKey
-  - Encrypt existing data keys using KMS Encrypt (for multi-keyring)
-  - Decrypt data keys using KMS Decrypt
+  Encrypts and decrypts data keys using AWS Key Management Service (KMS).
+  This is the primary keyring for AWS-based encryption workflows.
 
-  ## Example
+  ## Use Cases
 
-      {:ok, client} = KmsClient.ExAws.new(region: "us-west-2")
-      {:ok, keyring} = AwsKms.new("arn:aws:kms:us-west-2:123:key/abc", client)
+  - **Server-side encryption**: Encrypt data at rest with KMS-managed keys
+  - **Multi-party encryption**: Use with Multi-keyring for redundant key access
+  - **Compliance**: Leverage KMS audit trails and key policies
 
-      # Use with Default CMM
-      cmm = Default.new(keyring)
-      {:ok, materials} = Default.get_encryption_materials(cmm, request)
+  ## Key Identifier Formats
+
+  The keyring accepts various KMS key identifier formats:
+
+  | Format | Example | Recommended |
+  |--------|---------|-------------|
+  | Key ARN | `arn:aws:kms:us-west-2:123:key/abc` | Yes |
+  | Alias ARN | `arn:aws:kms:us-west-2:123:alias/my-key` | Yes |
+  | Key ID | `12345678-1234-1234-1234-123456789012` | No* |
+  | Alias Name | `alias/my-key` | No* |
+
+  *Non-ARN formats work but limit portability and explicit region control.
+
+  ## Operations
+
+  ### Encryption (wrap_key)
+
+  When no plaintext data key exists:
+  1. Calls KMS `GenerateDataKey` to create a new data key
+  2. Returns both plaintext and encrypted data key
+
+  When plaintext data key already exists (multi-keyring scenario):
+  1. Calls KMS `Encrypt` to wrap the existing key
+  2. Returns additional encrypted data key (EDK)
+
+  ### Decryption (unwrap_key)
+
+  1. Filters EDKs to find those with provider ID "aws-kms"
+  2. Validates EDK key ARN matches configured key (supports MRK matching)
+  3. Calls KMS `Decrypt` with the first matching EDK
+  4. Returns decrypted plaintext data key
+
+  ## IAM Permissions Required
+
+  The IAM principal must have these KMS permissions:
+
+  ### For Encryption
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": [
+      "kms:GenerateDataKey",
+      "kms:Encrypt"
+    ],
+    "Resource": "arn:aws:kms:REGION:ACCOUNT:key/KEY-ID"
+  }
+  ```
+
+  ### For Decryption
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": "kms:Decrypt",
+    "Resource": "arn:aws:kms:REGION:ACCOUNT:key/KEY-ID"
+  }
+  ```
+
+  ### For Both (Recommended)
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": [
+      "kms:GenerateDataKey",
+      "kms:Encrypt",
+      "kms:Decrypt"
+    ],
+    "Resource": "arn:aws:kms:REGION:ACCOUNT:key/KEY-ID"
+  }
+  ```
+
+  ## Security Considerations
+
+  - **Key Access**: Anyone with KMS Decrypt permission for the key can decrypt data
+  - **Encryption Context**: Use encryption context to bind ciphertext to specific contexts
+  - **Audit Trail**: All KMS operations are logged to CloudTrail
+  - **Key Rotation**: Enable automatic key rotation in KMS for long-lived keys
+  - **Grant Tokens**: Use for temporary, fine-grained access control
+
+  ## Examples
+
+  ### Basic Usage
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.AwsKms
+  alias AwsEncryptionSdk.Keyring.KmsClient.ExAws
+  alias AwsEncryptionSdk.Cmm.Default
+  alias AwsEncryptionSdk.Client
+
+  # Create KMS client for your region
+  {:ok, kms_client} = ExAws.new(region: "us-west-2")
+
+  # Create keyring with KMS key ARN
+  {:ok, keyring} = AwsKms.new(
+    "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+    kms_client
+  )
+
+  # Create CMM and client
+  cmm = Default.new(keyring)
+  client = Client.new(cmm)
+
+  # Encrypt
+  {:ok, ciphertext} = Client.encrypt(client, "sensitive data",
+    encryption_context: %{"tenant" => "acme", "purpose" => "storage"}
+  )
+
+  # Decrypt
+  {:ok, {plaintext, context}} = Client.decrypt(client, ciphertext)
+  ```
+
+  ### With Grant Tokens
+
+  ```elixir
+  {:ok, keyring} = AwsKms.new(
+    "arn:aws:kms:us-west-2:123:key/abc",
+    kms_client,
+    grant_tokens: ["grant-token-from-create-grant-api"]
+  )
+  ```
+
+  ### With Multi-Keyring for Redundancy
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.Multi
+
+  # Primary KMS key (generator)
+  {:ok, primary} = AwsKms.new("arn:aws:kms:us-west-2:123:key/primary", west_client)
+
+  # Backup KMS key (child)
+  {:ok, backup} = AwsKms.new("arn:aws:kms:us-east-1:123:key/backup", east_client)
+
+  # Multi-keyring: encrypts with both, can decrypt with either
+  {:ok, multi} = Multi.new(generator: primary, children: [backup])
+  ```
 
   ## Spec Reference
 

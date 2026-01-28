@@ -32,11 +32,16 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 - ✅ Client module with commitment policy enforcement
 - ✅ ECDSA signing for signed algorithm suites (P-384)
 - ✅ Support for all 17 algorithm suites
+- ✅ AWS KMS Keyring
+- ✅ AWS KMS Discovery Keyring
+- ✅ AWS KMS MRK Keyring
+- ✅ AWS KMS MRK Discovery Keyring
 
 ### Not Yet Implemented
 
-- ❌ AWS KMS keyring
 - ❌ Streaming encryption/decryption
+- ❌ Caching CMM
+- ❌ Required Encryption Context CMM
 
 ### Test Coverage
 
@@ -57,42 +62,93 @@ end
 
 ## Usage
 
-> **Note**: The current implementation requires you to provide your own key material.
-> Keyring support (including AWS KMS integration) is coming in a future release.
-
-### Basic Encryption
+### Basic Encryption with Raw Keyring
 
 ```elixir
-alias AwsEncryptionSdk.AlgorithmSuite
-alias AwsEncryptionSdk.Encrypt
-alias AwsEncryptionSdk.Decrypt
-alias AwsEncryptionSdk.Materials.{EncryptionMaterials, DecryptionMaterials}
+alias AwsEncryptionSdk.Client
+alias AwsEncryptionSdk.Cmm.Default
+alias AwsEncryptionSdk.Keyring.RawAes
 
-# Get the default algorithm suite (AES-256-GCM with key commitment)
-suite = AlgorithmSuite.default_suite()
+# Create a raw AES keyring
+key = :crypto.strong_rand_bytes(32)
+{:ok, keyring} = RawAes.new(key: key, namespace: "my-app", name: "data-key-1")
 
-# Create encryption materials with your data key
-materials = %EncryptionMaterials{
-  algorithm_suite: suite,
-  plaintext_data_key: :crypto.strong_rand_bytes(32),
-  encryption_context: %{"purpose" => "example", "tenant" => "test"},
-  encrypted_data_keys: []  # Would normally come from a keyring
-}
+# Create CMM and client
+cmm = Default.new(keyring)
+client = Client.new(cmm)
 
 # Encrypt data
 plaintext = "Hello, World!"
-{:ok, ciphertext} = Encrypt.encrypt(materials, plaintext)
+{:ok, ciphertext} = Client.encrypt(client, plaintext,
+  encryption_context: %{"purpose" => "example"}
+)
 
 # Decrypt data
-decryption_materials = %DecryptionMaterials{
-  algorithm_suite: suite,
-  plaintext_data_key: materials.plaintext_data_key,
-  encryption_context: materials.encryption_context
-}
-
-{:ok, decrypted} = Decrypt.decrypt(decryption_materials, ciphertext)
+{:ok, {decrypted, context}} = Client.decrypt(client, ciphertext)
 # decrypted == "Hello, World!"
 ```
+
+## AWS KMS Integration
+
+The SDK provides four KMS keyring types for different use cases:
+
+| Scenario | Recommended Keyring |
+|----------|---------------------|
+| Single key, known at encrypt/decrypt | `AwsKms` |
+| Unknown key at decrypt time | `AwsKmsDiscovery` |
+| Cross-region disaster recovery | `AwsKmsMrk` |
+| Cross-region discovery | `AwsKmsMrkDiscovery` |
+| Multiple keys for redundancy | `Multi` with KMS generator |
+
+### Basic KMS Encryption
+
+```elixir
+alias AwsEncryptionSdk.Client
+alias AwsEncryptionSdk.Cmm.Default
+alias AwsEncryptionSdk.Keyring.AwsKms
+alias AwsEncryptionSdk.Keyring.KmsClient.ExAws
+
+# Create KMS client
+{:ok, kms_client} = ExAws.new(region: "us-west-2")
+
+# Create keyring with your KMS key ARN
+{:ok, keyring} = AwsKms.new(
+  "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+  kms_client
+)
+
+# Create CMM and client
+cmm = Default.new(keyring)
+client = Client.new(cmm)
+
+# Encrypt data
+{:ok, ciphertext} = Client.encrypt(client, "Hello, World!",
+  encryption_context: %{"purpose" => "example"}
+)
+
+# Decrypt data
+{:ok, {plaintext, _context}} = Client.decrypt(client, ciphertext)
+```
+
+### AWS Credentials
+
+The SDK uses ExAws for AWS integration. Configure credentials via:
+
+1. **Environment variables**: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+2. **Instance profile**: Automatic on EC2/ECS/Lambda
+3. **Explicit configuration**:
+
+```elixir
+{:ok, client} = ExAws.new(
+  region: "us-west-2",
+  config: [
+    access_key_id: "AKIAIOSFODNN7EXAMPLE",
+    secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  ]
+)
+```
+
+See [examples/](examples/) for complete working examples.
 
 ## Requirements
 
@@ -105,10 +161,9 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed change history.
 
 **Planned for future releases:**
 
-1. **Keyrings** - Raw RSA and AWS KMS keyrings
-2. **CMM** - Cryptographic Materials Manager with caching
-3. **Streaming** - Large file encryption/decryption
-4. **Signatures** - ECDSA signing for signed algorithm suites
+1. **Streaming** - Large file encryption/decryption
+2. **Caching CMM** - Performance optimization for repeated operations
+3. **Required Encryption Context CMM** - Enforce required context keys
 
 ## Related Projects
 
