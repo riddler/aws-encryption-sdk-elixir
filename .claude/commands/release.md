@@ -91,6 +91,9 @@ This command automates the release process for the AWS Encryption SDK for Elixir
    - Must be < 1.0.0
    - If invalid, explain and ask again
 
+5. **Create release branch**:
+   - Create a new git branch named 'vX.Y.Z' (fill in the actual version numbers, but prefix with 'v')
+
 ### Step 3: Update CHANGELOG.md
 
 After version confirmation, update CHANGELOG.md:

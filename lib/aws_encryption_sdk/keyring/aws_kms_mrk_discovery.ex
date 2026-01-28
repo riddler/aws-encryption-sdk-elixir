@@ -2,18 +2,119 @@ defmodule AwsEncryptionSdk.Keyring.AwsKmsMrkDiscovery do
   @moduledoc """
   AWS KMS MRK Discovery Keyring implementation.
 
-  A decrypt-only keyring that combines discovery keyring behavior with MRK awareness.
-  For MRK keys, it reconstructs the ARN with the configured region, enabling
-  cross-region decryption. For non-MRK keys, it filters out EDKs where the
-  region doesn't match.
+  Combines discovery keyring behavior with Multi-Region Key (MRK) awareness.
+  Enables cross-region decryption of data encrypted with MRK keys without
+  knowing the specific key ARN in advance.
 
-  ## Example
+  ## Use Cases
 
-      {:ok, client} = KmsClient.ExAws.new(region: "us-west-2")
-      {:ok, keyring} = AwsKmsMrkDiscovery.new(client, "us-west-2")
+  - **Cross-region disaster recovery**: Decrypt in any region with MRK replicas
+  - **Global applications**: Access encrypted data from any region
+  - **Region failover**: Transparent failover to replica regions
 
-      # Can decrypt MRK-encrypted data from ANY region
-      {:ok, materials} = AwsKmsMrkDiscovery.unwrap_key(keyring, materials, edks)
+  ## MRK vs Non-MRK Behavior
+
+  | Key Type | Behavior |
+  |----------|----------|
+  | MRK (mrk-*) | Reconstructs ARN with keyring's region, enables cross-region |
+  | Non-MRK | Only decrypts if key is in same region as keyring |
+
+  ### Example: MRK Cross-Region
+
+  Data encrypted with `arn:aws:kms:us-east-1:123:key/mrk-abc` can be decrypted
+  by a keyring configured for `us-west-2` because:
+  1. Keyring detects MRK key ID (mrk-abc)
+  2. Reconstructs ARN: `arn:aws:kms:us-west-2:123:key/mrk-abc`
+  3. Calls KMS Decrypt in us-west-2 using the regional replica
+
+  ## Operations
+
+  ### Encryption
+
+  MRK Discovery keyrings **cannot encrypt**. `wrap_key/2` always returns
+  `{:error, :discovery_keyring_cannot_encrypt}`.
+
+  ### Decryption (unwrap_key)
+
+  1. Filters EDKs by provider ID "aws-kms"
+  2. Validates ARN format and applies discovery filter
+  3. For MRK keys: reconstructs ARN with configured region
+  4. For non-MRK keys: only proceeds if regions match
+  5. Calls KMS Decrypt with the (possibly reconstructed) ARN
+
+  ## Required Parameters
+
+  Unlike standard discovery keyring, MRK discovery requires a region:
+
+  | Parameter | Description |
+  |-----------|-------------|
+  | `kms_client` | KMS client for API calls |
+  | `region` | AWS region for MRK ARN reconstruction |
+
+  ## IAM Permissions Required
+
+  The principal needs `kms:Decrypt` on both the original key AND any
+  MRK replicas that might be used:
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": "kms:Decrypt",
+    "Resource": [
+      "arn:aws:kms:us-east-1:123456789012:key/mrk-*",
+      "arn:aws:kms:us-west-2:123456789012:key/mrk-*"
+    ]
+  }
+  ```
+
+  ## Examples
+
+  ### Basic MRK Discovery
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.AwsKmsMrkDiscovery
+  alias AwsEncryptionSdk.Keyring.KmsClient.ExAws
+  alias AwsEncryptionSdk.Cmm.Default
+  alias AwsEncryptionSdk.Client
+
+  # Create MRK discovery keyring for us-west-2
+  {:ok, kms_client} = ExAws.new(region: "us-west-2")
+  {:ok, keyring} = AwsKmsMrkDiscovery.new(kms_client, "us-west-2")
+
+  # Create client
+  cmm = Default.new(keyring)
+  client = Client.new(cmm)
+
+  # Decrypt data encrypted in ANY region with an MRK
+  {:ok, {plaintext, context}} = Client.decrypt(client, ciphertext)
+  ```
+
+  ### With Discovery Filter
+
+  ```elixir
+  {:ok, keyring} = AwsKmsMrkDiscovery.new(kms_client, "us-west-2",
+    discovery_filter: %{
+      partition: "aws",
+      accounts: ["123456789012"]
+    }
+  )
+  ```
+
+  ### Cross-Region Decryption Setup
+
+  ```elixir
+  # Data was encrypted in us-east-1 with:
+  # arn:aws:kms:us-east-1:123:key/mrk-abc
+
+  # Decrypt in us-west-2 (DR region)
+  {:ok, west_client} = ExAws.new(region: "us-west-2")
+  {:ok, keyring} = AwsKmsMrkDiscovery.new(west_client, "us-west-2",
+    discovery_filter: %{partition: "aws", accounts: ["123456789012"]}
+  )
+
+  # This works because mrk-abc has a replica in us-west-2
+  {:ok, {plaintext, _}} = Client.decrypt(Client.new(Default.new(keyring)), ciphertext)
+  ```
 
   ## Spec Reference
 

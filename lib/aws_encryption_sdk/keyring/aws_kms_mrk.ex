@@ -1,32 +1,125 @@
 defmodule AwsEncryptionSdk.Keyring.AwsKmsMrk do
   @moduledoc """
-  AWS KMS Multi-Region Key (MRK) aware Keyring implementation.
+  AWS KMS Multi-Region Key (MRK) Keyring implementation.
 
-  This keyring enables cross-region decryption using Multi-Region Keys (MRKs).
-  MRKs are KMS keys replicated across AWS regions with the same key material but
-  different regional ARNs. This keyring uses MRK matching to allow decryption
-  with any replica of the MRK used for encryption.
+  Enables cross-region encryption and decryption using KMS Multi-Region Keys.
+  MRKs are KMS keys that are replicated across AWS regions with the same key
+  material but different regional ARNs.
 
-  ## MRK Matching Behavior
+  ## Use Cases
 
-  When decrypting, this keyring can unwrap data keys encrypted with:
-  - The exact key configured in the keyring
-  - Any regional replica of the configured MRK (same key ID, different region)
+  - **Disaster recovery**: Encrypt in primary region, decrypt in DR region
+  - **Global applications**: Access data from any region with MRK replica
+  - **Data locality**: Keep encrypted data close to users while maintaining access
 
-  This enables cross-region disaster recovery and data access scenarios where
-  data encrypted in one region can be decrypted in another region using the
-  regional replica of the same MRK.
+  ## Multi-Region Keys (MRKs)
 
-  ## Example
+  MRKs have special key IDs starting with `mrk-`:
 
-      {:ok, client} = KmsClient.ExAws.new(region: "us-west-2")
-      {:ok, keyring} = AwsKmsMrk.new(
-        "arn:aws:kms:us-west-2:123456789012:key/mrk-1234abcd",
-        client
-      )
+  | Key Type | Key ID Format | Cross-Region |
+  |----------|---------------|--------------|
+  | Single-region | `12345678-...` | No |
+  | Multi-region | `mrk-12345678-...` | Yes |
 
-      # Can decrypt data encrypted with us-east-1 replica of same MRK
-      {:ok, materials} = AwsKmsMrk.unwrap_key(keyring, materials, edks)
+  ## MRK Matching
+
+  This keyring uses MRK matching to determine if it can decrypt an EDK:
+
+  | Configured Key | EDK Key | Match? |
+  |----------------|---------|--------|
+  | `mrk-abc` in us-west-2 | `mrk-abc` in us-east-1 | Yes |
+  | `mrk-abc` in us-west-2 | `mrk-xyz` in us-west-2 | No |
+  | `12345` in us-west-2 | `12345` in us-east-1 | No |
+
+  ## Operations
+
+  ### Encryption (wrap_key)
+
+  Identical to standard `AwsKms` keyring - MRK awareness only affects decryption.
+
+  ### Decryption (unwrap_key)
+
+  Uses MRK matching to allow decryption with any regional replica:
+  1. Filters EDKs by provider ID "aws-kms"
+  2. Uses MRK matching to find compatible EDKs
+  3. Calls KMS Decrypt with the configured key ARN
+  4. Returns decrypted plaintext data key
+
+  ## IAM Permissions Required
+
+  Same as standard KMS keyring, but grant on all regional replicas:
+
+  ```json
+  {
+    "Effect": "Allow",
+    "Action": [
+      "kms:GenerateDataKey",
+      "kms:Encrypt",
+      "kms:Decrypt"
+    ],
+    "Resource": [
+      "arn:aws:kms:us-west-2:123456789012:key/mrk-*",
+      "arn:aws:kms:us-east-1:123456789012:key/mrk-*"
+    ]
+  }
+  ```
+
+  ## Examples
+
+  ### Basic MRK Usage
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.AwsKmsMrk
+  alias AwsEncryptionSdk.Keyring.KmsClient.ExAws
+  alias AwsEncryptionSdk.Cmm.Default
+  alias AwsEncryptionSdk.Client
+
+  # Create keyring with MRK in us-west-2
+  {:ok, kms_client} = ExAws.new(region: "us-west-2")
+  {:ok, keyring} = AwsKmsMrk.new(
+    "arn:aws:kms:us-west-2:123456789012:key/mrk-12345678-1234-1234-1234-123456789012",
+    kms_client
+  )
+
+  # Encrypt in us-west-2
+  cmm = Default.new(keyring)
+  client = Client.new(cmm)
+  {:ok, ciphertext} = Client.encrypt(client, "sensitive data")
+  ```
+
+  ### Cross-Region Decryption
+
+  ```elixir
+  # Original encryption in us-west-2 (above)
+
+  # Decrypt in us-east-1 using the regional replica
+  {:ok, east_client} = ExAws.new(region: "us-east-1")
+  {:ok, east_keyring} = AwsKmsMrk.new(
+    "arn:aws:kms:us-east-1:123456789012:key/mrk-12345678-1234-1234-1234-123456789012",
+    east_client
+  )
+
+  # This works because MRK matching recognizes same key in different region
+  {:ok, {plaintext, _}} = Client.decrypt(Client.new(Default.new(east_keyring)), ciphertext)
+  ```
+
+  ### Multi-Keyring for Multi-Region
+
+  ```elixir
+  alias AwsEncryptionSdk.Keyring.Multi
+
+  # Use Multi.new_mrk_aware/4 for easy multi-region setup
+  {:ok, multi} = Multi.new_mrk_aware(
+    "arn:aws:kms:us-west-2:123:key/mrk-abc",
+    west_client,
+    [
+      {"us-east-1", east_client},
+      {"eu-west-1", eu_client}
+    ]
+  )
+
+  # Encrypts with us-west-2, can decrypt in any region
+  ```
 
   ## Spec Reference
 

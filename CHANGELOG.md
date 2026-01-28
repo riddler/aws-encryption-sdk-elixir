@@ -59,8 +59,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-region MRK matching for disaster recovery scenarios
 - Integration with Default CMM and Multi-keyring dispatch clauses
 - Comprehensive test suite with 28 tests covering cross-region scenarios
+- Comprehensive documentation for AWS KMS keyrings (#53)
+- Enhanced moduledocs for AwsKms, AwsKmsDiscovery, AwsKmsMrk, and AwsKmsMrkDiscovery
+- Use cases, IAM permissions, and security considerations for each keyring type
+- Code examples for basic usage, grant tokens, and multi-keyring patterns
+- Examples directory with 4 runnable scripts demonstrating KMS integration
+- kms_basic.exs for basic encryption/decryption workflow
+- kms_discovery.exs for discovery keyring usage
+- kms_multi_keyring.exs for redundant key protection
+- kms_cross_region.exs for MRK disaster recovery scenarios
+- AWS KMS Integration section in README with keyring selection guide
+- Updated README to reflect all implemented KMS keyrings
 
 ### Changed
+- Excluded examples directory from Credo analysis
 - Increased minimum code coverage requirement from 93% to 94%
 
 ## [0.4.0] - 2026-01-27
