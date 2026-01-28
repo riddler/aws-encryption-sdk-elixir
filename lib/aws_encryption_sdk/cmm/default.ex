@@ -34,7 +34,17 @@ defmodule AwsEncryptionSdk.Cmm.Default do
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Cmm.Behaviour, as: CmmBehaviour
   alias AwsEncryptionSdk.Crypto.ECDSA
-  alias AwsEncryptionSdk.Keyring.{AwsKms, AwsKmsDiscovery, AwsKmsMrk, Multi, RawAes, RawRsa}
+
+  alias AwsEncryptionSdk.Keyring.{
+    AwsKms,
+    AwsKmsDiscovery,
+    AwsKmsMrk,
+    AwsKmsMrkDiscovery,
+    Multi,
+    RawAes,
+    RawRsa
+  }
+
   alias AwsEncryptionSdk.Materials.{DecryptionMaterials, EncryptedDataKey, EncryptionMaterials}
 
   @type keyring ::
@@ -44,6 +54,7 @@ defmodule AwsEncryptionSdk.Cmm.Default do
           | AwsKms.t()
           | AwsKmsDiscovery.t()
           | AwsKmsMrk.t()
+          | AwsKmsMrkDiscovery.t()
 
   @type t :: %__MODULE__{
           keyring: keyring()
@@ -101,6 +112,10 @@ defmodule AwsEncryptionSdk.Cmm.Default do
     AwsKmsMrk.wrap_key(keyring, materials)
   end
 
+  def call_wrap_key(%AwsKmsMrkDiscovery{} = keyring, materials) do
+    AwsKmsMrkDiscovery.wrap_key(keyring, materials)
+  end
+
   def call_wrap_key(keyring, _materials) do
     {:error, {:unsupported_keyring_type, keyring.__struct__}}
   end
@@ -130,6 +145,10 @@ defmodule AwsEncryptionSdk.Cmm.Default do
 
   def call_unwrap_key(%AwsKmsMrk{} = keyring, materials, edks) do
     AwsKmsMrk.unwrap_key(keyring, materials, edks)
+  end
+
+  def call_unwrap_key(%AwsKmsMrkDiscovery{} = keyring, materials, edks) do
+    AwsKmsMrkDiscovery.unwrap_key(keyring, materials, edks)
   end
 
   def call_unwrap_key(keyring, _materials, _edks) do

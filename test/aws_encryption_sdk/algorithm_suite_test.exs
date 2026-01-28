@@ -1,6 +1,8 @@
 defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias AwsEncryptionSdk.AlgorithmSuite
 
   describe "default/0" do
@@ -116,39 +118,47 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
     ]
 
     test "all 11 ESDK suites are accessible via by_id/1" do
-      for suite_id <- @all_suite_ids do
-        assert {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        assert suite.id == suite_id
-      end
+      capture_log(fn ->
+        for suite_id <- @all_suite_ids do
+          assert {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          assert suite.id == suite_id
+        end
+      end)
     end
 
     test "all suites have required fields" do
-      for suite_id <- @all_suite_ids do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+      capture_log(fn ->
+        for suite_id <- @all_suite_ids do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
 
-        assert is_integer(suite.id)
-        assert is_binary(suite.name)
-        assert suite.message_format_version in [1, 2]
-        assert suite.encryption_algorithm in [:aes_128_gcm, :aes_192_gcm, :aes_256_gcm]
-        assert suite.data_key_length in [128, 192, 256]
-        assert suite.iv_length == 12
-        assert suite.auth_tag_length == 16
-        assert suite.kdf_type in [:hkdf, :identity]
-      end
+          assert is_integer(suite.id)
+          assert is_binary(suite.name)
+          assert suite.message_format_version in [1, 2]
+          assert suite.encryption_algorithm in [:aes_128_gcm, :aes_192_gcm, :aes_256_gcm]
+          assert suite.data_key_length in [128, 192, 256]
+          assert suite.iv_length == 12
+          assert suite.auth_tag_length == 16
+          assert suite.kdf_type in [:hkdf, :identity]
+        end
+      end)
     end
 
     test "all suites have consistent iv_length of 12" do
-      for suite_id <- @all_suite_ids do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        assert suite.iv_length == 12
-      end
+      capture_log(fn ->
+        for suite_id <- @all_suite_ids do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          assert suite.iv_length == 12
+        end
+      end)
     end
 
     test "all suites have consistent auth_tag_length of 16" do
-      for suite_id <- @all_suite_ids do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        assert suite.auth_tag_length == 16
-      end
+      capture_log(fn ->
+        for suite_id <- @all_suite_ids do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          assert suite.auth_tag_length == 16
+        end
+      end)
     end
   end
 
@@ -180,12 +190,14 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
     end
 
     test "unsigned suites have no signature algorithm" do
-      for suite_id <- @unsigned_suite_ids do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        refute AlgorithmSuite.signed?(suite)
-        assert suite.signature_algorithm == nil
-        assert suite.signature_hash == nil
-      end
+      capture_log(fn ->
+        for suite_id <- @unsigned_suite_ids do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          refute AlgorithmSuite.signed?(suite)
+          assert suite.signature_algorithm == nil
+          assert suite.signature_hash == nil
+        end
+      end)
     end
   end
 
@@ -194,13 +206,15 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
     @non_deprecated_suite_ids [0x0578, 0x0478, 0x0378, 0x0346, 0x0214, 0x0178, 0x0146, 0x0114]
 
     test "NO_KDF suites are deprecated" do
-      for suite_id <- @deprecated_suite_ids do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        assert AlgorithmSuite.deprecated?(suite)
-        refute AlgorithmSuite.allows_encryption?(suite)
-        assert suite.kdf_type == :identity
-        assert suite.kdf_hash == nil
-      end
+      capture_log(fn ->
+        for suite_id <- @deprecated_suite_ids do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          assert AlgorithmSuite.deprecated?(suite)
+          refute AlgorithmSuite.allows_encryption?(suite)
+          assert suite.kdf_type == :identity
+          assert suite.kdf_hash == nil
+        end
+      end)
     end
 
     test "HKDF suites are not deprecated" do
@@ -212,8 +226,6 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
         assert suite.kdf_hash != nil
       end
     end
-
-    import ExUnit.CaptureLog
 
     test "accessing deprecated suite logs warning" do
       log =
@@ -242,10 +254,12 @@ defmodule AwsEncryptionSdk.AlgorithmSuiteTest do
     end
 
     test "kdf_input_length matches data_key_length in bytes" do
-      for suite_id <- [0x0578, 0x0478, 0x0378, 0x0178, 0x0078] do
-        {:ok, suite} = AlgorithmSuite.by_id(suite_id)
-        assert suite.kdf_input_length == div(suite.data_key_length, 8)
-      end
+      capture_log(fn ->
+        for suite_id <- [0x0578, 0x0478, 0x0378, 0x0178, 0x0078] do
+          {:ok, suite} = AlgorithmSuite.by_id(suite_id)
+          assert suite.kdf_input_length == div(suite.data_key_length, 8)
+        end
+      end)
     end
   end
 

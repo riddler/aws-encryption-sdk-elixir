@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- AWS KMS MRK Discovery Keyring for cross-region MRK decryption (#51)
+- MRK-aware discovery keyring reconstructing ARNs with configured region
+- Cross-region MRK decryption enabling disaster recovery scenarios
+- Non-MRK key filtering by region match for security
+- Optional discovery filter for partition and account restrictions
+- Integration with Default CMM and Multi-keyring dispatch clauses
+- Comprehensive test suite with 28 tests
 - KMS client abstraction layer with behaviour interface (#46)
 - KmsClient behaviour defining generate_data_key/5, encrypt/5, and decrypt/5 callbacks
 - Mock KMS client implementation for testing without AWS credentials
