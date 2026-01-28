@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Multi-keyring generator validation rejecting discovery keyrings (#52)
+- Multi.new_with_kms_generator/4 convenience constructor for KMS generators
+- Multi.new_mrk_aware/4 convenience constructor for cross-region MRK scenarios
+- ARN reconstruction utilities for replica region keyring creation
 - AWS KMS MRK Discovery Keyring for cross-region MRK decryption (#51)
 - MRK-aware discovery keyring reconstructing ARNs with configured region
 - Cross-region MRK decryption enabling disaster recovery scenarios

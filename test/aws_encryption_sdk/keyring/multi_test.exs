@@ -2,7 +2,17 @@ defmodule AwsEncryptionSdk.Keyring.MultiTest do
   use ExUnit.Case, async: true
 
   alias AwsEncryptionSdk.AlgorithmSuite
-  alias AwsEncryptionSdk.Keyring.{Multi, RawAes}
+
+  alias AwsEncryptionSdk.Keyring.{
+    AwsKms,
+    AwsKmsDiscovery,
+    AwsKmsMrk,
+    AwsKmsMrkDiscovery,
+    Multi,
+    RawAes
+  }
+
+  alias AwsEncryptionSdk.Keyring.KmsClient.Mock
   alias AwsEncryptionSdk.Materials.{DecryptionMaterials, EncryptionMaterials}
 
   # Helper to create a test keyring
@@ -10,6 +20,39 @@ defmodule AwsEncryptionSdk.Keyring.MultiTest do
     key = :crypto.strong_rand_bytes(32)
     {:ok, keyring} = RawAes.new("test-namespace", name, key, :aes_256_gcm)
     keyring
+  end
+
+  describe "new/1 generator validation" do
+    test "rejects AwsKmsDiscovery as generator" do
+      {:ok, client} = Mock.new(%{})
+      {:ok, discovery} = AwsKmsDiscovery.new(client)
+
+      assert {:error, :discovery_keyring_cannot_be_generator} =
+               Multi.new(generator: discovery)
+    end
+
+    test "rejects AwsKmsMrkDiscovery as generator" do
+      {:ok, client} = Mock.new(%{})
+      {:ok, mrk_discovery} = AwsKmsMrkDiscovery.new(client, "us-west-2")
+
+      assert {:error, :discovery_keyring_cannot_be_generator} =
+               Multi.new(generator: mrk_discovery)
+    end
+
+    test "allows discovery keyrings as children" do
+      {:ok, client} = Mock.new(%{})
+
+      {:ok, kms} =
+        AwsKms.new(
+          "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+          client
+        )
+
+      {:ok, discovery} = AwsKmsDiscovery.new(client)
+
+      assert {:ok, multi} = Multi.new(generator: kms, children: [discovery])
+      assert multi.children == [discovery]
+    end
   end
 
   describe "new/1" do
@@ -398,6 +441,162 @@ defmodule AwsEncryptionSdk.Keyring.MultiTest do
       materials = DecryptionMaterials.new_for_decrypt(suite, %{})
 
       assert {:error, {:must_use_unwrap_key, _msg}} = Multi.on_decrypt(materials, [])
+    end
+  end
+
+  describe "new_with_kms_generator/4" do
+    test "creates multi-keyring with KMS generator" do
+      {:ok, client} = Mock.new(%{})
+
+      assert {:ok, multi} =
+               Multi.new_with_kms_generator(
+                 "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+                 client,
+                 []
+               )
+
+      assert %AwsKms{} = multi.generator
+
+      assert multi.generator.kms_key_id ==
+               "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
+
+      assert multi.children == []
+    end
+
+    test "creates multi-keyring with KMS generator and children" do
+      {:ok, client} = Mock.new(%{})
+      child = create_aes_keyring("child")
+
+      assert {:ok, multi} =
+               Multi.new_with_kms_generator(
+                 "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+                 client,
+                 [child]
+               )
+
+      assert %AwsKms{} = multi.generator
+      assert multi.children == [child]
+    end
+
+    test "passes grant tokens to KMS keyring" do
+      {:ok, client} = Mock.new(%{})
+
+      assert {:ok, multi} =
+               Multi.new_with_kms_generator(
+                 "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+                 client,
+                 [],
+                 grant_tokens: ["token1", "token2"]
+               )
+
+      assert multi.generator.grant_tokens == ["token1", "token2"]
+    end
+
+    test "returns error for invalid key_id" do
+      {:ok, client} = Mock.new(%{})
+
+      assert {:error, :key_id_required} = Multi.new_with_kms_generator(nil, client, [])
+      assert {:error, :key_id_empty} = Multi.new_with_kms_generator("", client, [])
+    end
+
+    test "returns error for invalid client" do
+      assert {:error, :client_required} =
+               Multi.new_with_kms_generator(
+                 "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012",
+                 nil,
+                 []
+               )
+    end
+  end
+
+  describe "new_mrk_aware/4" do
+    test "creates MRK-aware multi-keyring with primary and replicas" do
+      {:ok, primary_client} = Mock.new(%{})
+      {:ok, east_client} = Mock.new(%{})
+      {:ok, eu_client} = Mock.new(%{})
+
+      assert {:ok, multi} =
+               Multi.new_mrk_aware(
+                 "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123",
+                 primary_client,
+                 [
+                   {"us-east-1", east_client},
+                   {"eu-west-1", eu_client}
+                 ]
+               )
+
+      assert %AwsKmsMrk{} = multi.generator
+      assert multi.generator.kms_key_id == "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123"
+      assert length(multi.children) == 2
+
+      [east_keyring, eu_keyring] = multi.children
+      assert %AwsKmsMrk{} = east_keyring
+      assert %AwsKmsMrk{} = eu_keyring
+      assert east_keyring.kms_key_id == "arn:aws:kms:us-east-1:123456789012:key/mrk-abc123"
+      assert eu_keyring.kms_key_id == "arn:aws:kms:eu-west-1:123456789012:key/mrk-abc123"
+    end
+
+    test "creates MRK-aware multi-keyring with no replicas" do
+      {:ok, client} = Mock.new(%{})
+
+      assert {:ok, multi} =
+               Multi.new_mrk_aware(
+                 "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123",
+                 client,
+                 []
+               )
+
+      assert %AwsKmsMrk{} = multi.generator
+      assert multi.children == []
+    end
+
+    test "passes grant tokens to all keyrings" do
+      {:ok, primary_client} = Mock.new(%{})
+      {:ok, replica_client} = Mock.new(%{})
+
+      assert {:ok, multi} =
+               Multi.new_mrk_aware(
+                 "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123",
+                 primary_client,
+                 [{"us-east-1", replica_client}],
+                 grant_tokens: ["token1"]
+               )
+
+      assert multi.generator.grant_tokens == ["token1"]
+      [replica] = multi.children
+      assert replica.grant_tokens == ["token1"]
+    end
+
+    test "returns error for non-ARN primary key" do
+      {:ok, client} = Mock.new(%{})
+
+      # Alias names can't be reconstructed for different regions
+      assert {:error, {:invalid_replica_region, "us-east-1", :primary_key_must_be_arn}} =
+               Multi.new_mrk_aware(
+                 "alias/my-key",
+                 client,
+                 [{"us-east-1", client}]
+               )
+    end
+
+    test "returns error for invalid primary client" do
+      assert {:error, :client_required} =
+               Multi.new_mrk_aware(
+                 "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123",
+                 nil,
+                 []
+               )
+    end
+
+    test "returns error for invalid replica client" do
+      {:ok, primary_client} = Mock.new(%{})
+
+      assert {:error, {:replica_keyring_failed, "us-east-1", :client_required}} =
+               Multi.new_mrk_aware(
+                 "arn:aws:kms:us-west-2:123456789012:key/mrk-abc123",
+                 primary_client,
+                 [{"us-east-1", nil}]
+               )
     end
   end
 
