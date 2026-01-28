@@ -427,7 +427,7 @@ defmodule AwsEncryptionSdk.Keyring.AwsKmsTest do
   describe "behaviour callbacks" do
     test "on_encrypt returns error directing to wrap_key" do
       {:ok, mock} = Mock.new()
-      {:ok, keyring} = AwsKms.new(@kms_key_arn, mock)
+      {:ok, _keyring} = AwsKms.new(@kms_key_arn, mock)
 
       suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
       materials = EncryptionMaterials.new_for_encrypt(suite, %{})
@@ -438,7 +438,7 @@ defmodule AwsEncryptionSdk.Keyring.AwsKmsTest do
 
     test "on_decrypt returns error directing to unwrap_key" do
       {:ok, mock} = Mock.new()
-      {:ok, keyring} = AwsKms.new(@kms_key_arn, mock)
+      {:ok, _keyring} = AwsKms.new(@kms_key_arn, mock)
 
       suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
       materials = DecryptionMaterials.new_for_decrypt(suite, %{})
