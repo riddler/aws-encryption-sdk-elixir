@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grant tokens support for KMS API calls
 - Integration with Default CMM and Multi-keyring for seamless composition
 - Comprehensive test suite with 27 tests using Mock KMS client (96.1% coverage)
+- AWS KMS Discovery Keyring for decrypt-only operations (#49)
+- Discovery keyring decrypts data keys using ARN from EDK provider info
+- Optional discovery filter for partition and account restrictions
+- wrap_key/2 implementation that always fails (discovery cannot encrypt)
+- unwrap_key/3 with provider ID filtering, ARN validation, and KMS decrypt
+- Integration with Default CMM and Multi-keyring dispatch clauses
+- Comprehensive test suite with 30 tests (94.2% coverage)
 
 ### Changed
 - Increased minimum code coverage requirement from 93% to 94%
