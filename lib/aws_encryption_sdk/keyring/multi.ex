@@ -57,6 +57,7 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
     AwsKmsDiscovery,
     AwsKmsMrk,
     AwsKmsMrkDiscovery,
+    KmsKeyArn,
     RawAes,
     RawRsa
   }
@@ -112,7 +113,8 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
     children = Keyword.get(opts, :children, [])
 
     with :ok <- validate_at_least_one_keyring(generator, children),
-         :ok <- validate_generator_when_no_children(generator, children) do
+         :ok <- validate_generator_when_no_children(generator, children),
+         :ok <- validate_generator_can_encrypt(generator) do
       {:ok, %__MODULE__{generator: generator, children: children}}
     end
   end
@@ -124,6 +126,18 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
     do: {:error, :generator_required_when_no_children}
 
   defp validate_generator_when_no_children(_generator, _children), do: :ok
+
+  defp validate_generator_can_encrypt(nil), do: :ok
+
+  defp validate_generator_can_encrypt(%AwsKmsDiscovery{}) do
+    {:error, :discovery_keyring_cannot_be_generator}
+  end
+
+  defp validate_generator_can_encrypt(%AwsKmsMrkDiscovery{}) do
+    {:error, :discovery_keyring_cannot_be_generator}
+  end
+
+  defp validate_generator_can_encrypt(_generator), do: :ok
 
   @doc """
   Returns the list of all keyrings in this multi-keyring.
@@ -141,7 +155,137 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
   def list_keyrings(%__MODULE__{generator: nil, children: children}), do: children
   def list_keyrings(%__MODULE__{generator: gen, children: children}), do: [gen | children]
 
-  # Placeholder implementations - will be completed in Phases 2 and 3
+  @doc """
+  Creates a Multi-Keyring with an AWS KMS keyring as the generator.
+
+  Convenience function for the common pattern of using a KMS key as the
+  primary generator with additional child keyrings for backup decryption.
+
+  ## Parameters
+
+  - `kms_key_id` - AWS KMS key identifier for the generator
+  - `kms_client` - KMS client struct
+  - `child_keyrings` - List of child keyrings (can be empty)
+  - `opts` - Optional keyword list:
+    - `:grant_tokens` - Grant tokens for the KMS generator keyring
+
+  ## Returns
+
+  - `{:ok, multi_keyring}` on success
+  - `{:error, reason}` if KMS keyring creation fails or validation fails
+
+  ## Examples
+
+      {:ok, multi} = Multi.new_with_kms_generator(
+        "arn:aws:kms:us-west-2:123:key/abc",
+        kms_client,
+        [backup_keyring]
+      )
+
+  """
+  @spec new_with_kms_generator(String.t(), struct(), [keyring()], keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def new_with_kms_generator(kms_key_id, kms_client, child_keyrings, opts \\ [])
+      when is_list(child_keyrings) and is_list(opts) do
+    grant_tokens = Keyword.get(opts, :grant_tokens, [])
+
+    with {:ok, kms_keyring} <- AwsKms.new(kms_key_id, kms_client, grant_tokens: grant_tokens) do
+      new(generator: kms_keyring, children: child_keyrings)
+    end
+  end
+
+  @doc """
+  Creates a Multi-Region Key (MRK) aware Multi-Keyring.
+
+  Creates a multi-keyring optimized for cross-region scenarios using MRK replicas.
+  The primary key is used as the generator (using AwsKmsMrk keyring), and MRK
+  keyrings for each replica region are added as children for cross-region decryption.
+
+  ## Parameters
+
+  - `primary_key_id` - Primary MRK key identifier (should be an mrk-* key for cross-region functionality)
+  - `primary_client` - KMS client for the primary region
+  - `replicas` - List of `{region, kms_client}` tuples for replica regions
+  - `opts` - Optional keyword list:
+    - `:grant_tokens` - Grant tokens for all KMS keyrings
+
+  ## Returns
+
+  - `{:ok, multi_keyring}` on success
+  - `{:error, reason}` if any keyring creation fails
+
+  ## Examples
+
+      # Primary in us-west-2, replicas in us-east-1 and eu-west-1
+      {:ok, multi} = Multi.new_mrk_aware(
+        "arn:aws:kms:us-west-2:123:key/mrk-abc",
+        west_client,
+        [
+          {"us-east-1", east_client},
+          {"eu-west-1", eu_client}
+        ]
+      )
+
+  ## Notes
+
+  For true cross-region MRK functionality, the key_id should be an MRK
+  (key ID starting with `mrk-`). Non-MRK keys will work but won't provide
+  cross-region decryption capability.
+
+  """
+  @spec new_mrk_aware(String.t(), struct(), [{String.t(), struct()}], keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def new_mrk_aware(primary_key_id, primary_client, replicas, opts \\ [])
+      when is_list(replicas) and is_list(opts) do
+    grant_tokens = Keyword.get(opts, :grant_tokens, [])
+    kms_opts = [grant_tokens: grant_tokens]
+
+    with {:ok, generator} <- AwsKmsMrk.new(primary_key_id, primary_client, kms_opts),
+         {:ok, children} <- create_replica_keyrings(primary_key_id, replicas, kms_opts) do
+      new(generator: generator, children: children)
+    end
+  end
+
+  defp create_replica_keyrings(primary_key_id, replicas, kms_opts) do
+    results =
+      Enum.reduce_while(replicas, {:ok, []}, fn {region, client}, {:ok, acc} ->
+        case create_single_replica_keyring(primary_key_id, region, client, kms_opts) do
+          {:ok, keyring} -> {:cont, {:ok, [keyring | acc]}}
+          error -> {:halt, error}
+        end
+      end)
+
+    case results do
+      {:ok, keyrings} -> {:ok, Enum.reverse(keyrings)}
+      error -> error
+    end
+  end
+
+  defp create_single_replica_keyring(primary_key_id, region, client, kms_opts) do
+    with {:ok, replica_key_id} <- reconstruct_arn_for_region(primary_key_id, region),
+         {:ok, keyring} <- AwsKmsMrk.new(replica_key_id, client, kms_opts) do
+      {:ok, keyring}
+    else
+      {:error, :primary_key_must_be_arn} ->
+        {:error, {:invalid_replica_region, region, :primary_key_must_be_arn}}
+
+      {:error, reason} ->
+        {:error, {:replica_keyring_failed, region, reason}}
+    end
+  end
+
+  defp reconstruct_arn_for_region(key_id, region) do
+    case KmsKeyArn.parse(key_id) do
+      {:ok, arn} ->
+        {:ok, KmsKeyArn.to_string(%{arn | region: region})}
+
+      {:error, _reason} ->
+        # Not a full ARN - can't reconstruct for different region
+        {:error, :primary_key_must_be_arn}
+    end
+  end
+
+  # Helper implementations
 
   @doc """
   Wraps a data key using all keyrings in the multi-keyring.
