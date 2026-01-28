@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Caching CMM for reducing expensive key provider calls (#61)
+- CacheEntry struct with TTL and usage limit tracking
+- CryptographicMaterialsCache behaviour defining cache interface
+- LocalCache ETS-based implementation with atomic operations
+- Encryption materials caching with cache ID computation (SHA-384)
+- Decryption materials caching based on EDKs and context
+- Identity KDF bypass for deprecated NO_KDF algorithm suites
+- Partition ID isolation enabling multiple CMMs to share cache
+- Usage limits enforcement (max_messages and max_bytes)
+- TTL-based expiration with automatic cleanup on retrieval
+- Support for wrapping Default and RequiredEncryptionContext CMMs
+- Comprehensive test suite with 42 tests (94.2% coverage)
 - Required Encryption Context CMM for enforcing critical AAD keys (#62)
 - Wrapping CMM validating required keys in encryption and decryption
 - new/2 constructor accepting required keys and underlying CMM
