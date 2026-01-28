@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Required Encryption Context CMM for enforcing critical AAD keys (#62)
+- Wrapping CMM validating required keys in encryption and decryption
+- new/2 constructor accepting required keys and underlying CMM
+- new_with_keyring/2 constructor auto-wrapping keyring in Default CMM
+- Validation ensuring required keys present in caller's context
+- Validation ensuring required keys present in reproduced context
+- Support for nested CMM composition with layered validation
+- Client dispatcher integration for RequiredEncryptionContext CMM
+- Comprehensive test suite with 21 tests covering all scenarios
+
 ## [0.5.0] - 2026-01-28
 
 ### Added
