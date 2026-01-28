@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - unwrap_key/3 with provider ID filtering, ARN validation, and KMS decrypt
 - Integration with Default CMM and Multi-keyring dispatch clauses
 - Comprehensive test suite with 30 tests (94.2% coverage)
+- AWS KMS Multi-Region Key (MRK) Keyring for cross-region decryption (#50)
+- MRK-aware keyring enabling data decryption with regional MRK replicas
+- wrap_key/2 and unwrap_key/3 functions delegating to AwsKms keyring
+- Cross-region MRK matching for disaster recovery scenarios
+- Integration with Default CMM and Multi-keyring dispatch clauses
+- Comprehensive test suite with 28 tests covering cross-region scenarios
 
 ### Changed
 - Increased minimum code coverage requirement from 93% to 94%
