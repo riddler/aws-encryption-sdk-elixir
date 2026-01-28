@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Manual verification script (scripts/verify_kms_client.exs)
 - Environment variable template (.env.example)
 - AWS SDK dependencies: ex_aws, ex_aws_kms, hackney, sweet_xml
+- KMS Key ARN utilities for parsing and validation (#47)
+- parse/1 function with comprehensive ARN validation per AWS spec
+- mrk?/1 function for Multi-Region Key identification
+- mrk_match?/2 function for cross-region MRK matching
+- arn?/1 helper for ARN format detection
+- to_string/1 function for ARN reconstruction
+- String.Chars protocol implementation for idiomatic usage
+- Support for all AWS partitions (aws, aws-cn, aws-us-gov)
+- Comprehensive test suite with 64 tests covering valid/invalid ARNs
+- Test vector validation using keys.json test data
 
 ## [0.4.0] - 2026-01-27
 
