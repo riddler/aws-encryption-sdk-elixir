@@ -34,6 +34,7 @@ defmodule AwsEncryptionSdk.Client do
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Cmm.Behaviour, as: CmmBehaviour
   alias AwsEncryptionSdk.Cmm.Default
+  alias AwsEncryptionSdk.Cmm.RequiredEncryptionContext
   alias AwsEncryptionSdk.Decrypt
   alias AwsEncryptionSdk.Encrypt
   alias AwsEncryptionSdk.Format.Header
@@ -346,7 +347,10 @@ defmodule AwsEncryptionSdk.Client do
     Default.get_encryption_materials(cmm, request)
   end
 
-  # Add support for other CMM types as they are implemented
+  defp call_cmm_get_encryption_materials(%RequiredEncryptionContext{} = cmm, request) do
+    RequiredEncryptionContext.get_encryption_materials(cmm, request)
+  end
+
   defp call_cmm_get_encryption_materials(cmm, _request) do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
@@ -402,7 +406,10 @@ defmodule AwsEncryptionSdk.Client do
     Default.get_decryption_materials(cmm, request)
   end
 
-  # Add support for other CMM types as they are implemented
+  defp call_cmm_get_decryption_materials(%RequiredEncryptionContext{} = cmm, request) do
+    RequiredEncryptionContext.get_decryption_materials(cmm, request)
+  end
+
   defp call_cmm_get_decryption_materials(cmm, _request) do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
