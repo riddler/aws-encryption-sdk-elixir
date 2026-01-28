@@ -52,8 +52,8 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
 
   @behaviour AwsEncryptionSdk.Keyring.Behaviour
 
+  alias AwsEncryptionSdk.Keyring.{AwsKms, RawAes, RawRsa}
   alias AwsEncryptionSdk.Keyring.Behaviour, as: KeyringBehaviour
-  alias AwsEncryptionSdk.Keyring.{RawAes, RawRsa}
   alias AwsEncryptionSdk.Materials.{DecryptionMaterials, EncryptedDataKey, EncryptionMaterials}
 
   @type keyring :: struct()
@@ -216,6 +216,10 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
     RawRsa.wrap_key(keyring, materials)
   end
 
+  defp call_wrap_key(%AwsKms{} = keyring, materials) do
+    AwsKms.wrap_key(keyring, materials)
+  end
+
   defp call_wrap_key(%__MODULE__{} = keyring, materials) do
     # Nested multi-keyring
     wrap_key(keyring, materials)
@@ -282,6 +286,10 @@ defmodule AwsEncryptionSdk.Keyring.Multi do
 
   defp call_unwrap_key(%RawRsa{} = keyring, materials, edks) do
     RawRsa.unwrap_key(keyring, materials, edks)
+  end
+
+  defp call_unwrap_key(%AwsKms{} = keyring, materials, edks) do
+    AwsKms.unwrap_key(keyring, materials, edks)
   end
 
   defp call_unwrap_key(%__MODULE__{} = keyring, materials, edks) do

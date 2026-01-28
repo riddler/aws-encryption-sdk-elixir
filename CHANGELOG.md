@@ -28,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for all AWS partitions (aws, aws-cn, aws-us-gov)
 - Comprehensive test suite with 64 tests covering valid/invalid ARNs
 - Test vector validation using keys.json test data
+- AWS KMS Keyring implementation for encrypting/decrypting data keys with AWS KMS (#48)
+- wrap_key/2 function with dual paths: GenerateDataKey (new keys) and Encrypt (existing keys)
+- unwrap_key/3 function with EDK filtering by provider ID, ARN validation, and key matching
+- Support for MRK (Multi-Region Key) cross-region matching
+- Grant tokens support for KMS API calls
+- Integration with Default CMM and Multi-keyring for seamless composition
+- Comprehensive test suite with 27 tests using Mock KMS client (96.1% coverage)
+
+### Changed
+- Increased minimum code coverage requirement from 93% to 94%
 
 ## [0.4.0] - 2026-01-27
 
