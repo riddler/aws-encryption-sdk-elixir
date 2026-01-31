@@ -70,12 +70,6 @@ defmodule AwsEncryptionSdk.Keyring.KmsClient.ExAws do
     {:ok, %__MODULE__{region: region, config: config}}
   end
 
-  # NOTE: This code is tested via integration tests (test/aws_encryption_sdk/keyring/kms_client/ex_aws_integration_test.exs)
-  # Run with: source .env && mix test --only integration
-  # Coverage is excluded here to allow local development without AWS credentials.
-  # CI should run integration tests for full coverage.
-  # coveralls-ignore-start
-
   @impl KmsClient
   def generate_data_key(
         %__MODULE__{} = client,
@@ -235,6 +229,4 @@ defmodule AwsEncryptionSdk.Keyring.KmsClient.ExAws do
     |> Macro.underscore()
     |> String.to_atom()
   end
-
-  # coveralls-ignore-stop
 end

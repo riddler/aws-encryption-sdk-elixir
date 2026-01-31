@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Integration tests now run by default in CI (#68)
+- Coverage threshold adjusted from 94% to 92%
+
 ### Added
+- Comprehensive streaming error tests covering all error paths (#68)
+- CMM dispatch tests for RequiredEncryptionContext and Caching CMMs (#68)
 - Caching CMM for reducing expensive key provider calls (#61)
 - CacheEntry struct with TTL and usage limit tracking
 - CryptographicMaterialsCache behaviour defining cache interface
@@ -42,6 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Commitment key derivation module for key commitment verification
 - Comprehensive test suite with 41 streaming tests (edge cases, integration, signed suites)
 - Edge case tests for empty plaintext, single byte, exact frame multiples, byte-by-byte input
+
+### Fixed
+- KMS integration tests skip gracefully when AWS credentials unavailable (#68)
+- Unused default parameter warning in caching_test.exs (#68)
+
+### Removed
+- All temporary coveralls-ignore markers (42 markers across 4 files) (#68)
+- Default exclusion of :integration tag from test suite (#68)
 
 ## [0.5.0] - 2026-01-28
 

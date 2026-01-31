@@ -105,16 +105,12 @@ defmodule AwsEncryptionSdk.Stream do
           {:ok, enc, ciphertext} ->
             {[header, ciphertext], enc}
 
-          # coveralls-ignore-start
           {:error, reason} ->
             raise "Encryption failed: #{inspect(reason)}"
-            # coveralls-ignore-stop
         end
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Failed to generate header: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -126,10 +122,8 @@ defmodule AwsEncryptionSdk.Stream do
       {:ok, enc, ciphertext} ->
         {[ciphertext], enc}
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Encryption failed: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -141,16 +135,12 @@ defmodule AwsEncryptionSdk.Stream do
           {:ok, _enc, final} ->
             {[header, final], enc}
 
-          # coveralls-ignore-start
           {:error, reason} ->
             raise "Finalization failed: #{inspect(reason)}"
-            # coveralls-ignore-stop
         end
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Failed to generate header: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -159,10 +149,8 @@ defmodule AwsEncryptionSdk.Stream do
       {:ok, _enc, final} ->
         {[final], enc}
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Finalization failed: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -195,10 +183,8 @@ defmodule AwsEncryptionSdk.Stream do
       {:ok, dec, plaintexts} ->
         {[plaintexts], dec}
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Decryption failed: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -207,10 +193,8 @@ defmodule AwsEncryptionSdk.Stream do
       {:ok, _dec, final} ->
         {[final], dec}
 
-      # coveralls-ignore-start
       {:error, reason} ->
         raise "Finalization failed: #{inspect(reason)}"
-        # coveralls-ignore-stop
     end
   end
 
@@ -219,7 +203,6 @@ defmodule AwsEncryptionSdk.Stream do
     Default.get_encryption_materials(cmm, request)
   end
 
-  # coveralls-ignore-start
   defp call_cmm_get_encryption_materials(%RequiredEncryptionContext{} = cmm, request) do
     RequiredEncryptionContext.get_encryption_materials(cmm, request)
   end
@@ -232,14 +215,11 @@ defmodule AwsEncryptionSdk.Stream do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
 
-  # coveralls-ignore-stop
-
   # Dispatch get_decryption_materials to the appropriate CMM module
   defp call_cmm_get_decryption_materials(%Default{} = cmm, request) do
     Default.get_decryption_materials(cmm, request)
   end
 
-  # coveralls-ignore-start
   defp call_cmm_get_decryption_materials(%RequiredEncryptionContext{} = cmm, request) do
     RequiredEncryptionContext.get_decryption_materials(cmm, request)
   end
@@ -251,6 +231,4 @@ defmodule AwsEncryptionSdk.Stream do
   defp call_cmm_get_decryption_materials(cmm, _request) do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
-
-  # coveralls-ignore-stop
 end
