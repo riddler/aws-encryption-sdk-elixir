@@ -37,6 +37,21 @@ defmodule AwsEncryptionSdk do
   - `encrypt_with_keyring/3` - Convenience function for encryption with keyring
   - `decrypt_with_keyring/3` - Convenience function for decryption with keyring
 
+  ## Streaming API
+
+  For large files or memory-constrained environments:
+
+  - `encrypt_stream/3` - Stream encryption with chunked input
+  - `decrypt_stream/3` - Stream decryption with chunked input
+
+  ```elixir
+  # Encrypt a large file
+  File.stream!("large_file.bin", [], 4096)
+  |> AwsEncryptionSdk.encrypt_stream(client)
+  |> Stream.into(File.stream!("encrypted.bin"))
+  |> Stream.run()
+  ```
+
   ## Materials-Based API (Advanced)
 
   For advanced use cases or testing, you can use the materials-based API:
@@ -54,10 +69,14 @@ defmodule AwsEncryptionSdk do
   - Enforces encryption context validation
   - Commitment policy prevents algorithm downgrade attacks
 
-  ## Current Limitations
+  ## Streaming Support
 
-  This is a non-streaming implementation that requires the entire plaintext/ciphertext
-  in memory. Streaming support will be added in a future release.
+  This SDK supports both batch and streaming encryption/decryption:
+
+  - **Batch API** (`encrypt/3`, `decrypt/3`): Requires entire plaintext/ciphertext in memory
+  - **Streaming API** (`encrypt_stream/3`, `decrypt_stream/3`): Processes data incrementally
+
+  For large files, use the streaming API to avoid memory issues.
   """
 
   alias AwsEncryptionSdk.Client
@@ -267,4 +286,39 @@ defmodule AwsEncryptionSdk do
 
   """
   defdelegate decrypt_with_keyring(keyring, ciphertext, opts \\ []), to: Client
+
+  @doc """
+  Creates a stream that encrypts plaintext chunks.
+
+  See `AwsEncryptionSdk.Stream.encrypt/3` for details.
+
+  ## Example
+
+      File.stream!("input.bin", [], 4096)
+      |> AwsEncryptionSdk.encrypt_stream(client)
+      |> Stream.into(File.stream!("output.encrypted"))
+      |> Stream.run()
+
+  """
+  defdelegate encrypt_stream(plaintext_stream, client, opts \\ []),
+    to: AwsEncryptionSdk.Stream,
+    as: :encrypt
+
+  @doc """
+  Creates a stream that decrypts ciphertext chunks.
+
+  See `AwsEncryptionSdk.Stream.decrypt/3` for details.
+
+  ## Example
+
+      File.stream!("encrypted.bin", [], 4096)
+      |> AwsEncryptionSdk.decrypt_stream(client)
+      |> Stream.map(fn {plaintext, _status} -> plaintext end)
+      |> Stream.into(File.stream!("output.bin"))
+      |> Stream.run()
+
+  """
+  defdelegate decrypt_stream(ciphertext_stream, client, opts \\ []),
+    to: AwsEncryptionSdk.Stream,
+    as: :decrypt
 end

@@ -29,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for nested CMM composition with layered validation
 - Client dispatcher integration for RequiredEncryptionContext CMM
 - Comprehensive test suite with 21 tests covering all scenarios
+- Streaming encryption and decryption APIs for processing large data incrementally (#60)
+- Stream.Encryptor state machine with incremental frame generation
+- Stream.Decryptor state machine with incremental frame parsing
+- Stream.SignatureAccumulator for ECDSA signing without buffering entire message
+- encrypt_stream/3 and decrypt_stream/3 high-level APIs using Elixir Streams
+- Support for both signed and unsigned algorithm suites in streaming mode
+- fail_on_signed option to reject signed suites during streaming decryption
+- Incremental plaintext release for unsigned suites (frame-by-frame)
+- Deferred final frame release for signed suites (after signature verification)
+- Header authentication module for v1/v2 header tag computation
+- Commitment key derivation module for key commitment verification
+- Comprehensive test suite with 41 streaming tests (edge cases, integration, signed suites)
+- Edge case tests for empty plaintext, single byte, exact frame multiples, byte-by-byte input
 
 ## [0.5.0] - 2026-01-28
 
