@@ -118,12 +118,9 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
     {:ok, dec, []}
   end
 
-  # coveralls-ignore-start
   def finalize(%__MODULE__{state: :done, buffer: buffer}) when byte_size(buffer) > 0 do
     {:error, :trailing_bytes}
   end
-
-  # coveralls-ignore-stop
 
   def finalize(%__MODULE__{state: :reading_footer} = dec) do
     # Try to parse footer
@@ -131,22 +128,17 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       {:ok, dec, plaintexts} ->
         {:ok, dec, plaintexts}
 
-      # coveralls-ignore-start
       {:error, :incomplete_footer} ->
         {:error, :incomplete_message}
 
       error ->
         error
-        # coveralls-ignore-stop
     end
   end
 
-  # coveralls-ignore-start
   def finalize(%__MODULE__{state: state}) do
     {:error, {:incomplete_message, state}}
   end
-
-  # coveralls-ignore-stop
 
   @doc """
   Returns the parsed header, if available.
@@ -171,7 +163,6 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       {:ok, header, rest} ->
         process_header(dec, acc, header, rest)
 
-      # coveralls-ignore-start
       # Handle errors during header parsing
       # Real errors (not incomplete data) should be propagated
       {:error, {:unsupported_version, _version}} = error ->
@@ -179,8 +170,6 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
       {:error, {:invalid_content_type, _type}} = error ->
         error
-
-      # coveralls-ignore-stop
 
       # All other errors during header parsing are treated as incomplete data
       # This is safe in streaming context - we just need more bytes
@@ -214,10 +203,8 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       {:error, :incomplete_footer} ->
         {:ok, dec, Enum.reverse(acc)}
 
-      # coveralls-ignore-start
       error ->
         error
-        # coveralls-ignore-stop
     end
   end
 
@@ -227,11 +214,9 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
   # Helper functions for processing header
   defp process_header(dec, acc, header, rest) do
-    # coveralls-ignore-start
     # Check for signed suite if fail_on_signed is set
     if dec.fail_on_signed and AlgorithmSuite.signed?(header.algorithm_suite) do
       {:error, :signed_algorithm_suite_not_allowed}
-      # coveralls-ignore-stop
     else
       # Get materials and verify header
       with {:ok, materials} <- dec.get_materials.(header),
@@ -269,11 +254,9 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
   # Helper functions for processing frames
   defp process_frame(dec, acc, frame, rest) do
-    # coveralls-ignore-start
     # Verify sequence number
     if frame.sequence_number != dec.expected_sequence do
       {:error, {:sequence_mismatch, dec.expected_sequence, frame.sequence_number}}
-      # coveralls-ignore-stop
     else
       with {:ok, plaintext} <- decrypt_frame(frame, dec) do
         sig_acc = update_signature_accumulator(dec, rest)
@@ -339,9 +322,7 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       dec = %{dec | state: :done, buffer: remaining, signature_acc: nil}
       {:ok, dec, [{dec.final_frame_plaintext, :verified}]}
     else
-      # coveralls-ignore-start
       {:error, :signature_verification_failed}
-      # coveralls-ignore-stop
     end
   end
 
@@ -353,11 +334,8 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
     suite = materials.algorithm_suite
 
     case suite.kdf_type do
-      # coveralls-ignore-start
       :identity ->
         {:ok, materials.plaintext_data_key}
-
-      # coveralls-ignore-stop
 
       :hkdf ->
         key_length = div(suite.data_key_length, 8)
@@ -377,12 +355,9 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
     "DERIVEKEY" <> <<suite.id::16-big>>
   end
 
-  # coveralls-ignore-start
   defp derive_key_info(suite) do
     <<suite.id::16-big>>
   end
-
-  # coveralls-ignore-stop
 
   defp verify_commitment(materials, header) do
     Commitment.verify_commitment(materials, header)

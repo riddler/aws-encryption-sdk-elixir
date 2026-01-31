@@ -12,7 +12,7 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
     keyring
   end
 
-  defp setup_caching_cmm(opts \\ []) do
+  defp setup_caching_cmm(opts) do
     {:ok, cache} = LocalCache.start_link([])
     keyring = create_test_keyring()
     cmm = Caching.new_with_keyring(keyring, cache, opts)

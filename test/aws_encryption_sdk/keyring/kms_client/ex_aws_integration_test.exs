@@ -17,13 +17,16 @@ defmodule AwsEncryptionSdk.Keyring.KmsClient.ExAwsIntegrationTest do
   # Note: These tests will make real AWS API calls and may incur small costs.
 
   setup_all do
-    # Skip all tests if KMS_KEY_ARN is not set
-    case System.get_env("KMS_KEY_ARN") do
-      nil ->
-        {:ok, skip: true}
+    key_arn = System.get_env("KMS_KEY_ARN")
+    region = System.get_env("AWS_REGION", "us-east-1")
+    {:ok, key_arn: key_arn, region: region}
+  end
 
-      key_arn ->
-        {:ok, key_arn: key_arn, region: System.get_env("AWS_REGION", "us-east-1")}
+  setup %{key_arn: key_arn} do
+    if is_nil(key_arn) do
+      {:ok, skip: true}
+    else
+      :ok
     end
   end
 

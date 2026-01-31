@@ -41,6 +41,7 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
   @behaviour AwsEncryptionSdk.Cmm.Behaviour
 
   alias AwsEncryptionSdk.Cmm.Behaviour, as: CmmBehaviour
+  alias AwsEncryptionSdk.Cmm.Caching
   alias AwsEncryptionSdk.Cmm.Default
 
   @type t :: %__MODULE__{
@@ -168,6 +169,10 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
     get_encryption_materials(cmm, request)
   end
 
+  defp call_underlying_cmm_encrypt(%Caching{} = cmm, request) do
+    Caching.get_encryption_materials(cmm, request)
+  end
+
   defp call_underlying_cmm_encrypt(cmm, _request) do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
@@ -204,6 +209,10 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
 
   defp call_underlying_cmm_decrypt(%__MODULE__{} = cmm, request) do
     get_decryption_materials(cmm, request)
+  end
+
+  defp call_underlying_cmm_decrypt(%Caching{} = cmm, request) do
+    Caching.get_decryption_materials(cmm, request)
   end
 
   defp call_underlying_cmm_decrypt(cmm, _request) do
