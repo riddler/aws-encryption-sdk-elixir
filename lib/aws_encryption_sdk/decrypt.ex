@@ -14,9 +14,10 @@ defmodule AwsEncryptionSdk.Decrypt do
   """
 
   alias AwsEncryptionSdk.Crypto.AesGcm
+  alias AwsEncryptionSdk.Crypto.Commitment
+  alias AwsEncryptionSdk.Crypto.HeaderAuth
   alias AwsEncryptionSdk.Crypto.HKDF
   alias AwsEncryptionSdk.Format.BodyAad
-  alias AwsEncryptionSdk.Format.EncryptionContext
   alias AwsEncryptionSdk.Format.Header
   alias AwsEncryptionSdk.Format.Message
   alias AwsEncryptionSdk.Materials.DecryptionMaterials
@@ -109,56 +110,13 @@ defmodule AwsEncryptionSdk.Decrypt do
   end
 
   # Verify key commitment for committed algorithm suites
-  defp verify_commitment(
-         _materials,
-         %Header{algorithm_suite: %{commitment_length: 0}},
-         _derived_key
-       ) do
-    # Non-committed suite, skip verification
-    :ok
-  end
-
   defp verify_commitment(materials, header, _derived_key) do
-    suite = materials.algorithm_suite
-
-    # Derive commitment key
-    info = "COMMITKEY" <> <<suite.id::16-big>>
-
-    case HKDF.derive(suite.kdf_hash, materials.plaintext_data_key, header.message_id, info, 32) do
-      {:ok, expected_commitment} ->
-        if :crypto.hash_equals(expected_commitment, header.algorithm_suite_data) do
-          :ok
-        else
-          {:error, :commitment_mismatch}
-        end
-
-      {:error, _reason} = error ->
-        error
-    end
+    Commitment.verify_commitment(materials, header)
   end
 
   # Verify header authentication tag
   defp verify_header_auth_tag(header, derived_key) do
-    # Compute AAD: header body + serialized encryption context
-    {:ok, header_body} = Header.serialize_body(header)
-    ec_bytes = EncryptionContext.serialize(header.encryption_context)
-    aad = header_body <> ec_bytes
-
-    # IV is all zeros for header
-    iv = AesGcm.zero_iv()
-
-    # Decrypt empty ciphertext to verify tag
-    case AesGcm.decrypt(
-           header.algorithm_suite.encryption_algorithm,
-           derived_key,
-           iv,
-           <<>>,
-           aad,
-           header.header_auth_tag
-         ) do
-      {:ok, <<>>} -> :ok
-      {:error, :authentication_failed} -> {:error, :header_authentication_failed}
-    end
+    HeaderAuth.verify_header_auth_tag(header, derived_key)
   end
 
   # Decrypt message body

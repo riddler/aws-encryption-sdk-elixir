@@ -101,6 +101,62 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   end
 
   @doc """
+  Signs a pre-computed digest using ECDSA P-384.
+
+  This is useful for streaming where the hash is accumulated incrementally.
+
+  ## Parameters
+
+  - `digest` - SHA-384 digest (48 bytes)
+  - `private_key` - Raw private key bytes
+
+  ## Returns
+
+  - DER-encoded ECDSA signature
+
+  ## Examples
+
+      iex> {private_key, _public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
+      iex> digest = :crypto.hash(:sha384, "test message")
+      iex> signature = AwsEncryptionSdk.Crypto.ECDSA.sign_digest(digest, private_key)
+      iex> is_binary(signature)
+      true
+
+  """
+  @spec sign_digest(binary(), binary()) :: binary()
+  def sign_digest(digest, private_key) when byte_size(digest) == 48 and is_binary(private_key) do
+    :crypto.sign(:ecdsa, :sha384, {:digest, digest}, [private_key, :secp384r1])
+  end
+
+  @doc """
+  Verifies an ECDSA signature against a pre-computed digest.
+
+  ## Parameters
+
+  - `digest` - SHA-384 digest (48 bytes)
+  - `signature` - DER-encoded ECDSA signature
+  - `public_key` - Raw public key bytes
+
+  ## Returns
+
+  - `true` if valid, `false` otherwise
+
+  ## Examples
+
+      iex> {private_key, public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
+      iex> digest = :crypto.hash(:sha384, "test message")
+      iex> signature = AwsEncryptionSdk.Crypto.ECDSA.sign_digest(digest, private_key)
+      iex> AwsEncryptionSdk.Crypto.ECDSA.verify_digest(digest, signature, public_key)
+      true
+
+  """
+  @spec verify_digest(binary(), binary(), binary()) :: boolean()
+  def verify_digest(digest, signature, public_key)
+      when byte_size(digest) == 48 and is_binary(signature) and is_binary(public_key) do
+    :crypto.verify(:ecdsa, :sha384, {:digest, digest}, signature, [public_key, :secp384r1])
+  end
+
+  @doc """
   Verifies an ECDSA signature over the given message using SHA-384.
 
   ## Parameters

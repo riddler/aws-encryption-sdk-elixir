@@ -15,10 +15,10 @@ defmodule AwsEncryptionSdk.Encrypt do
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Crypto.AesGcm
   alias AwsEncryptionSdk.Crypto.ECDSA
+  alias AwsEncryptionSdk.Crypto.HeaderAuth
   alias AwsEncryptionSdk.Crypto.HKDF
   alias AwsEncryptionSdk.Format.Body
   alias AwsEncryptionSdk.Format.BodyAad
-  alias AwsEncryptionSdk.Format.EncryptionContext
   alias AwsEncryptionSdk.Format.Header
   alias AwsEncryptionSdk.Materials.EncryptionMaterials
 
@@ -139,50 +139,12 @@ defmodule AwsEncryptionSdk.Encrypt do
 
   # Build header struct (without auth tag)
   defp build_header(materials, message_id, frame_length, commitment_key) do
-    suite = materials.algorithm_suite
-
-    # For v1 headers, we need header_iv (12 bytes of zeros)
-    # For v2 headers, header_iv is not used (nil)
-    header_iv = if suite.message_format_version == 1, do: AesGcm.zero_iv(), else: nil
-
-    header = %Header{
-      version: suite.message_format_version,
-      algorithm_suite: suite,
-      message_id: message_id,
-      encryption_context: materials.encryption_context,
-      encrypted_data_keys: materials.encrypted_data_keys,
-      content_type: :framed,
-      frame_length: frame_length,
-      algorithm_suite_data: commitment_key,
-      header_iv: header_iv,
-      # Placeholder, will be computed
-      header_auth_tag: <<0::128>>
-    }
-
-    {:ok, header}
+    HeaderAuth.build_header(materials, message_id, frame_length, commitment_key)
   end
 
   # Compute header authentication tag
   defp compute_header_auth_tag(header, derived_key) do
-    # AAD = header body + serialized encryption context
-    {:ok, header_body} = Header.serialize_body(header)
-    ec_bytes = EncryptionContext.serialize(header.encryption_context)
-    aad = header_body <> ec_bytes
-
-    # IV is all zeros
-    iv = AesGcm.zero_iv()
-
-    # Encrypt empty plaintext to get auth tag
-    {<<>>, auth_tag} =
-      AesGcm.encrypt(
-        header.algorithm_suite.encryption_algorithm,
-        derived_key,
-        iv,
-        <<>>,
-        aad
-      )
-
-    {:ok, %{header | header_auth_tag: auth_tag}}
+    HeaderAuth.compute_header_auth_tag(header, derived_key)
   end
 
   # Encrypt body into frames
