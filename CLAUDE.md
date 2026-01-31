@@ -268,9 +268,9 @@ mix hex.publish
 - [x] AWS KMS MRK-aware keyrings
 
 ### Milestone 5: Advanced Features
-- [ ] Streaming encryption/decryption
-- [ ] Caching CMM
-- [ ] Required encryption context CMM
+- [x] Streaming encryption/decryption
+- [x] Caching CMM
+- [x] Required encryption context CMM
 
 ### Milestone 6: Validation
 - [ ] Full test vector suite

@@ -13,7 +13,7 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 
 ## Current Status
 
-**Version**: 0.5.0 (pre-release)
+**Version**: 0.6.0 (pre-release)
 
 ### Implemented Features
 
@@ -36,17 +36,14 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 - ✅ AWS KMS Discovery Keyring
 - ✅ AWS KMS MRK Keyring
 - ✅ AWS KMS MRK Discovery Keyring
-
-### Not Yet Implemented
-
-- ❌ Streaming encryption/decryption
-- ❌ Caching CMM
-- ❌ Required Encryption Context CMM
+- ✅ Streaming encryption/decryption
+- ✅ Caching CMM
+- ✅ Required Encryption Context CMM
 
 ### Test Coverage
 
-- 469 tests passing
-- 93.8% code coverage
+- 805 tests passing
+- 92.6% code coverage
 
 ## Installation
 
@@ -55,7 +52,7 @@ Add `aws_encryption_sdk` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:aws_encryption_sdk, "~> 0.5.0"}
+    {:aws_encryption_sdk, "~> 0.6.0"}
   ]
 end
 ```
@@ -161,9 +158,9 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed change history.
 
 **Planned for future releases:**
 
-1. **Streaming** - Large file encryption/decryption
-2. **Caching CMM** - Performance optimization for repeated operations
-3. **Required Encryption Context CMM** - Enforce required context keys
+1. **Full test vector suite** - Complete validation against AWS test vectors
+2. **Cross-SDK interoperability** - Comprehensive testing with other SDKs
+3. **Performance benchmarks** - Optimization and performance analysis
 
 ## Related Projects
 

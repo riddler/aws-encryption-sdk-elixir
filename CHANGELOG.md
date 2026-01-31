@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-01-31
+
 ### Changed
 - Integration tests now run by default in CI (#68)
 - Coverage threshold adjusted from 94% to 92%
@@ -281,7 +283,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests for encrypt/decrypt round-trips
 - AES KeyWrap test support module
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.2.0...v0.3.0
