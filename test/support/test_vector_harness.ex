@@ -283,4 +283,67 @@ defmodule AwsEncryptionSdk.TestSupport.TestVectorHarness do
        error_description: error_desc
      }}
   end
+
+  # ============================================================================
+  # Filtering Helpers
+  # ============================================================================
+
+  @doc """
+  Returns all success test cases (tests with expected plaintext output).
+  """
+  @spec success_tests(t()) :: [{String.t(), test_case()}]
+  def success_tests(%__MODULE__{tests: tests}) do
+    Enum.filter(tests, fn {_id, test} -> test.result == :success end)
+  end
+
+  @doc """
+  Returns all error test cases.
+  """
+  @spec error_tests(t()) :: [{String.t(), test_case()}]
+  def error_tests(%__MODULE__{tests: tests}) do
+    Enum.filter(tests, fn {_id, test} -> test.result == :error end)
+  end
+
+  @doc """
+  Filters tests to only include those with raw (non-KMS) keys.
+  """
+  @spec raw_key_tests([{String.t(), test_case()}]) :: [{String.t(), test_case()}]
+  def raw_key_tests(tests) do
+    Enum.filter(tests, fn {_id, test} ->
+      Enum.all?(test.master_keys, fn key -> key["type"] == "raw" end)
+    end)
+  end
+
+  @doc """
+  Filters tests by encryption algorithm (aes or rsa).
+  """
+  @spec by_encryption_algorithm([{String.t(), test_case()}], String.t()) ::
+          [{String.t(), test_case()}]
+  def by_encryption_algorithm(tests, algorithm) do
+    Enum.filter(tests, fn {_id, test} ->
+      Enum.all?(test.master_keys, fn key ->
+        key["type"] == "raw" and key["encryption-algorithm"] == algorithm
+      end)
+    end)
+  end
+
+  @doc """
+  Filters tests that use multiple master keys (multi-keyring scenarios).
+  """
+  @spec multi_key_tests([{String.t(), test_case()}]) :: [{String.t(), test_case()}]
+  def multi_key_tests(tests) do
+    Enum.filter(tests, fn {_id, test} ->
+      length(test.master_keys) > 1
+    end)
+  end
+
+  @doc """
+  Filters tests that use a single master key.
+  """
+  @spec single_key_tests([{String.t(), test_case()}]) :: [{String.t(), test_case()}]
+  def single_key_tests(tests) do
+    Enum.filter(tests, fn {_id, test} ->
+      length(test.master_keys) == 1
+    end)
+  end
 end

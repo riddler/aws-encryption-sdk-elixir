@@ -56,7 +56,13 @@ defmodule AwsEncryptionSdk.Decrypt do
          {:ok, message, <<>>} <- Message.deserialize(ciphertext),
          {:ok, derived_key} <- derive_data_key(materials, message.header),
          :ok <- verify_commitment(materials, message.header, derived_key),
-         :ok <- verify_header_auth_tag(message.header, derived_key),
+         :ok <-
+           verify_header_auth_tag(
+             message.header,
+             derived_key,
+             materials.encryption_context,
+             materials.required_encryption_context_keys
+           ),
          {:ok, plaintext} <- decrypt_body(message.body, message.header, derived_key),
          :ok <- verify_signature(message, materials) do
       {:ok,
@@ -91,22 +97,26 @@ defmodule AwsEncryptionSdk.Decrypt do
   defp derive_with_hkdf(suite, plaintext_data_key, message_id) do
     key_length = div(suite.data_key_length, 8)
 
-    # For committed suites, info is "DERIVEKEY" + 2-byte suite ID (big-endian)
-    # For non-committed HKDF suites, info is just the suite ID bytes
-    info = derive_key_info(suite)
+    # Per spec, HKDF parameters differ between committed and non-committed suites:
+    # - Committed suites: salt = message_id, info = "DERIVEKEY" + suite_id
+    # - Non-committed suites: salt = nil (zeros), info = suite_id + message_id
+    {salt, info} = derive_key_params(suite, message_id)
 
-    HKDF.derive(suite.kdf_hash, plaintext_data_key, message_id, info, key_length)
+    HKDF.derive(suite.kdf_hash, plaintext_data_key, salt, info, key_length)
   end
 
-  defp derive_key_info(%{commitment_length: 32} = suite) do
-    # Committed suites use "DERIVEKEY" label
-    <<suite.id::16-big>>
-    |> then(&("DERIVEKEY" <> &1))
+  defp derive_key_params(%{commitment_length: 32} = suite, message_id) do
+    # Committed suites: salt = message_id, info = suite_id + "DERIVEKEY"
+    salt = message_id
+    info = <<suite.id::16-big>> <> "DERIVEKEY"
+    {salt, info}
   end
 
-  defp derive_key_info(suite) do
-    # Non-committed HKDF suites use just the suite ID
-    <<suite.id::16-big>>
+  defp derive_key_params(suite, message_id) do
+    # Non-committed HKDF suites: salt = nil (zeros), info = suite_id + message_id
+    salt = nil
+    info = <<suite.id::16-big>> <> message_id
+    {salt, info}
   end
 
   # Verify key commitment for committed algorithm suites
@@ -115,8 +125,8 @@ defmodule AwsEncryptionSdk.Decrypt do
   end
 
   # Verify header authentication tag
-  defp verify_header_auth_tag(header, derived_key) do
-    HeaderAuth.verify_header_auth_tag(header, derived_key)
+  defp verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys) do
+    HeaderAuth.verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys)
   end
 
   # Decrypt message body

@@ -12,6 +12,11 @@
   # Global options
   # quick: false,  # Skip dialyzer and coverage enforcement
 
+  # Test options
+  test: [
+    include: [:test_vectors]
+  ],
+
   # Compilation options
   # compile: [
   #   warnings_as_errors: true

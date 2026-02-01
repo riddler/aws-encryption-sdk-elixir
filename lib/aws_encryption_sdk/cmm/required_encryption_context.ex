@@ -113,7 +113,18 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
          {:ok, materials} <- call_underlying_cmm_encrypt(cmm.underlying_cmm, updated_request),
          :ok <-
            validate_required_keys_in_materials(cmm.required_encryption_context_keys, materials) do
-      {:ok, materials}
+      # Update materials to include required encryption context keys for header auth
+      # Merge with any existing required keys from underlying CMM
+      all_required_keys =
+        (materials.required_encryption_context_keys ++ cmm.required_encryption_context_keys)
+        |> Enum.uniq()
+
+      updated_materials = %{
+        materials
+        | required_encryption_context_keys: all_required_keys
+      }
+
+      {:ok, updated_materials}
     end
   end
 
@@ -132,7 +143,18 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
              cmm.required_encryption_context_keys,
              materials
            ) do
-      {:ok, materials}
+      # Update materials to include required encryption context keys for header auth
+      # Merge with any existing required keys from underlying CMM
+      all_required_keys =
+        (materials.required_encryption_context_keys ++ cmm.required_encryption_context_keys)
+        |> Enum.uniq()
+
+      updated_materials = %{
+        materials
+        | required_encryption_context_keys: all_required_keys
+      }
+
+      {:ok, updated_materials}
     end
   end
 

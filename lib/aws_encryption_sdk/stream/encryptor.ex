@@ -145,7 +145,13 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
          {:ok, derived_key, commitment_key} <- derive_keys(enc.materials, message_id),
          {:ok, header} <-
            build_header(enc.materials, message_id, enc.frame_length, commitment_key),
-         {:ok, header_with_tag} <- compute_header_auth_tag(header, derived_key),
+         {:ok, header_with_tag} <-
+           compute_header_auth_tag(
+             header,
+             derived_key,
+             enc.materials.encryption_context,
+             enc.materials.required_encryption_context_keys
+           ),
          {:ok, header_binary} <- Header.serialize(header_with_tag) do
       # Update signature accumulator with header
       sig_acc =
@@ -251,14 +257,19 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
 
       :hkdf ->
         key_length = div(suite.data_key_length, 8)
-        info = derive_key_info(suite)
+
+        # Per spec, HKDF parameters differ between committed and non-committed suites:
+        # - Committed suites: salt = message_id, info = "DERIVEKEY" + suite_id
+        # - Non-committed suites: salt = nil (zeros), info = suite_id + message_id
+        {salt, info} = derive_key_params(suite, message_id)
 
         {:ok, derived_key} =
-          HKDF.derive(suite.kdf_hash, materials.plaintext_data_key, message_id, info, key_length)
+          HKDF.derive(suite.kdf_hash, materials.plaintext_data_key, salt, info, key_length)
 
         commitment_key =
           if suite.commitment_length > 0 do
-            commit_info = "COMMITKEY" <> <<suite.id::16-big>>
+            # Committed suites: salt = message_id, info = "COMMITKEY" (just the label, no suite_id)
+            commit_info = "COMMITKEY"
 
             {:ok, key} =
               HKDF.derive(
@@ -278,20 +289,26 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
     end
   end
 
-  defp derive_key_info(%{commitment_length: 32} = suite) do
-    "DERIVEKEY" <> <<suite.id::16-big>>
+  defp derive_key_params(%{commitment_length: 32} = suite, message_id) do
+    # Committed suites: salt = message_id, info = suite_id + "DERIVEKEY"
+    salt = message_id
+    info = <<suite.id::16-big>> <> "DERIVEKEY"
+    {salt, info}
   end
 
-  defp derive_key_info(suite) do
-    <<suite.id::16-big>>
+  defp derive_key_params(suite, message_id) do
+    # Non-committed HKDF suites: salt = nil (zeros), info = suite_id + message_id
+    salt = nil
+    info = <<suite.id::16-big>> <> message_id
+    {salt, info}
   end
 
   defp build_header(materials, message_id, frame_length, commitment_key) do
     HeaderAuth.build_header(materials, message_id, frame_length, commitment_key)
   end
 
-  defp compute_header_auth_tag(header, derived_key) do
-    HeaderAuth.compute_header_auth_tag(header, derived_key)
+  defp compute_header_auth_tag(header, derived_key, full_ec, required_ec_keys) do
+    HeaderAuth.compute_header_auth_tag(header, derived_key, full_ec, required_ec_keys)
   end
 
   defp extract_frames(buffer, enc) when byte_size(buffer) < enc.frame_length do

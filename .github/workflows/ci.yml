@@ -98,6 +98,22 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
 
+      - name: Cache test vectors
+        uses: actions/cache@v4
+        with:
+          path: test/fixtures/test_vectors
+          key: test-vectors-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: test-vectors-
+
+      - name: Setup test vectors
+        run: |
+          if [ ! -d "test/fixtures/test_vectors/.git" ]; then
+            git clone --depth 1 https://github.com/awslabs/aws-encryption-sdk-test-vectors.git \
+              test/fixtures/test_vectors
+            cd test/fixtures/test_vectors/vectors/awses-decrypt
+            unzip -q python-2.3.0.zip
+          fi
+
       - name: Run quality checks
         run: mix quality
 

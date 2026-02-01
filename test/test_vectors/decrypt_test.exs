@@ -17,7 +17,7 @@ defmodule AwsEncryptionSdk.TestVectors.DecryptTest do
   @moduletag :test_vectors
 
   # Skip entire module if test vectors not available
-  @moduletag skip: not TestVectorSetup.vectors_available?()
+  # Skip tag added conditionally below
 
   setup_all do
     case TestVectorSetup.find_manifest("**/manifest.json") do

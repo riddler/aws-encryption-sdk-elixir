@@ -20,8 +20,6 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
   - ECDSA P-384 message signing
   """
 
-  require Logger
-
   @typedoc "Algorithm suite identifier (2-byte big-endian integer)"
   @type suite_id :: non_neg_integer()
 
@@ -473,17 +471,14 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
   end
 
   def by_id(@aes_256_gcm_iv12_tag16_no_kdf) do
-    log_deprecation_warning(@aes_256_gcm_iv12_tag16_no_kdf)
     {:ok, aes_256_gcm_iv12_tag16_no_kdf()}
   end
 
   def by_id(@aes_192_gcm_iv12_tag16_no_kdf) do
-    log_deprecation_warning(@aes_192_gcm_iv12_tag16_no_kdf)
     {:ok, aes_192_gcm_iv12_tag16_no_kdf()}
   end
 
   def by_id(@aes_128_gcm_iv12_tag16_no_kdf) do
-    log_deprecation_warning(@aes_128_gcm_iv12_tag16_no_kdf)
     {:ok, aes_128_gcm_iv12_tag16_no_kdf()}
   end
 
@@ -526,12 +521,4 @@ defmodule AwsEncryptionSdk.AlgorithmSuite do
   @spec deprecated?(t()) :: boolean()
   def deprecated?(%__MODULE__{kdf_type: :identity}), do: true
   def deprecated?(%__MODULE__{kdf_type: _kdf_type}), do: false
-
-  @spec log_deprecation_warning(suite_id()) :: :ok
-  defp log_deprecation_warning(suite_id) do
-    Logger.warning(
-      "Algorithm suite 0x#{Integer.to_string(suite_id, 16)} (NO_KDF) is deprecated. " <>
-        "Use a committed algorithm suite for new encryptions."
-    )
-  end
 end
