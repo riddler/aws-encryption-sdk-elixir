@@ -16,14 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive module grouping in Hex docs for all keyrings, CMMs, caching, and streaming modules (#72)
 - User guides for Getting Started, Choosing Components, and Security Best Practices (#73)
 - Automated testing for guide code examples with extraction and validation (#73)
+- Advanced feature examples demonstrating streaming, caching, and required encryption context (#75)
+- Streaming file encryption example with 10MB test file and memory-efficient processing
+- Caching CMM example showing 2x performance improvement for high-throughput scenarios
+- Required Encryption Context example enforcing mandatory context keys for compliance
 
 ### Changed
 - Consolidated CHANGELOG entries to improve readability and scannability (#81)
 - Enhanced streaming module documentation with usage guidance, memory efficiency details, and verification handling (#72)
+- Examples reorganized into complexity-based subdirectories (01_basics, 02_advanced, 03_aws_kms) (#75)
+- Examples README updated with category-based navigation and quick start commands
 
 ### Fixed
 - RSA keyring PEM loading to correctly decode keys using `pem_entry_decode` instead of `der_decode` (#74)
 - All KMS examples updated to use correct Client API format (map-based return values)
+- Client module now supports Caching CMM in dispatch clauses for encryption and decryption (#75)
 
 ## [0.6.0] - 2026-01-31
 
