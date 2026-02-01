@@ -49,10 +49,10 @@ encrypt_client = Client.new(Default.new(encrypt_keyring))
 plaintext = "Secret message for discovery example"
 
 IO.puts("\nEncrypting with known key...")
-{:ok, ciphertext} = Client.encrypt(encrypt_client, plaintext,
+{:ok, result} = Client.encrypt(encrypt_client, plaintext,
   encryption_context: %{"example" => "discovery"}
 )
-IO.puts("Encrypted! Size: #{byte_size(ciphertext)} bytes")
+IO.puts("Encrypted! Size: #{byte_size(result.ciphertext)} bytes")
 
 # ============================================================
 # Step 2: Decrypt with discovery keyring
@@ -71,8 +71,8 @@ decrypt_client = Client.new(Default.new(discovery_keyring))
 IO.puts("\nDecrypting with discovery keyring...")
 IO.puts("(Discovery keyring doesn't know which key was used)")
 
-{:ok, {decrypted, _context}} = Client.decrypt(decrypt_client, ciphertext)
-IO.puts("Decrypted: #{decrypted}")
+{:ok, decrypt_result} = Client.decrypt(decrypt_client, result.ciphertext)
+IO.puts("Decrypted: #{decrypt_result.plaintext}")
 
 IO.puts("\n✓ Discovery decryption successful!")
 IO.puts("The discovery keyring found the correct key automatically.")

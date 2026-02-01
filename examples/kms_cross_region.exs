@@ -51,10 +51,10 @@ encrypt_client = Client.new(Default.new(primary_keyring))
 plaintext = "Data encrypted in #{primary_region}, to be decrypted in #{replica_region}"
 
 IO.puts("\nEncrypting in #{primary_region}...")
-{:ok, ciphertext} = Client.encrypt(encrypt_client, plaintext,
+{:ok, result} = Client.encrypt(encrypt_client, plaintext,
   encryption_context: %{"source_region" => primary_region}
 )
-IO.puts("Encrypted! Size: #{byte_size(ciphertext)} bytes")
+IO.puts("Encrypted! Size: #{byte_size(result.ciphertext)} bytes")
 
 # ============================================================
 # Step 2: Decrypt in replica region
@@ -67,10 +67,10 @@ IO.puts("\nDecrypting in #{replica_region} using MRK replica...")
 
 decrypt_client = Client.new(Default.new(replica_keyring))
 
-{:ok, {decrypted, context}} = Client.decrypt(decrypt_client, ciphertext)
+{:ok, decrypt_result} = Client.decrypt(decrypt_client, result.ciphertext)
 
-IO.puts("Decrypted: #{decrypted}")
-IO.puts("Context shows source: #{context["source_region"]}")
+IO.puts("Decrypted: #{decrypt_result.plaintext}")
+IO.puts("Context shows source: #{decrypt_result.encryption_context["source_region"]}")
 
 IO.puts("\n✓ Cross-region decryption successful!")
 IO.puts("Data encrypted in #{primary_region} was decrypted in #{replica_region}")
