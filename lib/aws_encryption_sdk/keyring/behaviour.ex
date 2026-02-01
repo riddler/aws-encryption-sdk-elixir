@@ -5,6 +5,8 @@ defmodule AwsEncryptionSdk.Keyring.Behaviour do
   Keyrings are responsible for generating, encrypting, and decrypting data keys.
   All keyring implementations must implement this behaviour.
 
+  For help choosing a keyring, see the [Choosing Components](choosing-components.html) guide.
+
   ## Callbacks
 
   - `on_encrypt/1` - Generate and/or encrypt data keys during encryption

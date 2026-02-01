@@ -87,6 +87,9 @@ defmodule AwsEncryptionSdk.MixProject do
         "README.md": [title: "Overview"],
         "CHANGELOG.md": [title: "Changelog"],
         "CONTRIBUTING.md": [title: "Contributing"],
+        "guides/getting-started.md": [title: "Getting Started"],
+        "guides/choosing-components.md": [title: "Choosing Components"],
+        "guides/security-best-practices.md": [title: "Security Best Practices"],
         "guides/STABILITY.md": [title: "API Stability Policy"],
         LICENSE: [title: "License"]
       ],

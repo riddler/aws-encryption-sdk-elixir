@@ -69,6 +69,12 @@ defmodule AwsEncryptionSdk do
   - Enforces encryption context validation
   - Commitment policy prevents algorithm downgrade attacks
 
+  ## Guides
+
+  - **[Getting Started](getting-started.html)** - Quick introduction to encryption
+  - **[Choosing Components](choosing-components.html)** - Select the right keyring and CMM
+  - **[Security Best Practices](security-best-practices.html)** - Production deployment guidance
+
   ## Streaming Support
 
   This SDK supports both batch and streaming encryption/decryption:
