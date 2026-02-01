@@ -15,6 +15,7 @@ defmodule AwsEncryptionSdk.Decrypt do
 
   alias AwsEncryptionSdk.Crypto.AesGcm
   alias AwsEncryptionSdk.Crypto.Commitment
+  alias AwsEncryptionSdk.Crypto.ECDSA
   alias AwsEncryptionSdk.Crypto.HeaderAuth
   alias AwsEncryptionSdk.Crypto.HKDF
   alias AwsEncryptionSdk.Format.BodyAad
@@ -64,7 +65,7 @@ defmodule AwsEncryptionSdk.Decrypt do
              materials.required_encryption_context_keys
            ),
          {:ok, plaintext} <- decrypt_body(message.body, message.header, derived_key),
-         :ok <- verify_signature(message, materials) do
+         :ok <- verify_signature(message, materials, ciphertext) do
       {:ok,
        %{
          plaintext: plaintext,
@@ -197,17 +198,63 @@ defmodule AwsEncryptionSdk.Decrypt do
   end
 
   # Verify signature (for signed suites)
-  defp verify_signature(%{footer: nil}, _materials), do: :ok
+  defp verify_signature(%{footer: nil}, _materials, _ciphertext), do: :ok
 
-  defp verify_signature(%{footer: %{signature: _signature}}, %{verification_key: nil}) do
+  defp verify_signature(
+         %{footer: %{signature: _signature}},
+         %{verification_key: nil},
+         _ciphertext
+       ) do
     # Signed suite but no verification key provided
     {:error, :missing_verification_key}
   end
 
-  defp verify_signature(_message, _materials) do
-    # TO DO: Implement ECDSA signature verification
-    # For now, skip signature verification for signed suites
-    # This will be implemented when we add ECDSA support
-    :ok
+  defp verify_signature(
+         %{footer: %{signature: signature}},
+         %{algorithm_suite: suite, verification_key: verification_key},
+         ciphertext
+       )
+       when is_binary(verification_key) do
+    # Calculate header + body bytes from ciphertext
+    # Footer format: signature_length (2 bytes) + signature
+    # Signature is computed over header + body (everything before the footer)
+    footer_len = 2 + byte_size(signature)
+    message_len = byte_size(ciphertext) - footer_len
+    <<message_bytes::binary-size(message_len), _footer::binary>> = ciphertext
+
+    # Get the correct hash and curve from the algorithm suite
+    {hash_algo, curve} = signature_params_from_suite(suite)
+
+    # Normalize the public key (decompress if needed)
+    normalized_key = ECDSA.normalize_public_key(verification_key, curve)
+
+    # Compute hash and verify signature
+    try do
+      digest = :crypto.hash(hash_algo, message_bytes)
+
+      if :crypto.verify(:ecdsa, hash_algo, {:digest, digest}, signature, [normalized_key, curve]) do
+        :ok
+      else
+        {:error, :signature_verification_failed}
+      end
+    rescue
+      _e ->
+        # :crypto.verify raised an error
+        {:error, :signature_verification_failed}
+    end
+  end
+
+  # Get signature hash algorithm and curve from algorithm suite
+  defp signature_params_from_suite(%{signature_algorithm: :ecdsa_p256}) do
+    {:sha256, :secp256r1}
+  end
+
+  defp signature_params_from_suite(%{signature_algorithm: :ecdsa_p384}) do
+    {:sha384, :secp384r1}
+  end
+
+  defp signature_params_from_suite(_suite) do
+    # Default for backwards compatibility (shouldn't be reached for signed suites)
+    {:sha384, :secp384r1}
   end
 end
