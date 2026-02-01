@@ -1,27 +1,68 @@
 defmodule AwsEncryptionSdk.Stream.Encryptor do
   @moduledoc """
-  Streaming encryptor state machine.
+  Streaming encryptor state machine for incremental plaintext processing.
 
-  Processes plaintext incrementally and emits ciphertext frames. Designed for
-  use with Elixir's Stream functions.
+  ## When to Use Streaming
+
+  Use `Stream.Encryptor` instead of `Client.encrypt/2` when:
+
+  - Encrypting large files that don't fit in memory
+  - Processing data from network streams or pipes
+  - Working with data sources that produce chunks incrementally
+  - Memory constraints require bounded memory usage
+
+  For small messages (< 1MB), the simpler `Client.encrypt/2` API is recommended.
+
+  ## Memory Efficiency
+
+  The streaming encryptor maintains constant memory usage regardless of input size:
+
+  - Buffers only one frame's worth of plaintext (default: 4096 bytes)
+  - Emits ciphertext incrementally as complete frames
+  - No need to load entire plaintext into memory
+
+  For a 1GB file with 4KB frames, memory usage is ~4KB regardless of file size,
+  compared to ~1GB for non-streaming encryption.
+
+  ## Integration with Elixir Streams
+
+  Designed to work seamlessly with `Stream` module:
+
+      File.stream!("large-file.bin", [], 4096)
+      |> AwsEncryptionSdk.Stream.encrypt(client)
+      |> Stream.into(File.stream!("output.encrypted"))
+      |> Stream.run()
+
+  See `AwsEncryptionSdk.Stream` for high-level streaming API.
 
   ## State Machine
+
+  The encryptor progresses through these states:
 
   1. `:init` - Not started, awaiting first input
   2. `:encrypting` - Processing frames
   3. `:done` - Encryption complete
 
-  ## Example
+  ## Low-Level Example
+
+  For custom streaming logic, use the state machine directly:
 
       # Initialize encryptor
       {:ok, enc} = Encryptor.init(materials, frame_length: 4096)
 
       # Process chunks, collecting output
-      {enc, header_bytes} = Encryptor.start(enc)
-      {enc, frame1_bytes} = Encryptor.update(enc, chunk1)
-      {enc, frame2_bytes} = Encryptor.update(enc, chunk2)
-      {enc, final_bytes} = Encryptor.finalize(enc)
+      {:ok, enc, header_bytes} = Encryptor.start(enc)
+      {:ok, enc, frame1_bytes} = Encryptor.update(enc, chunk1)
+      {:ok, enc, frame2_bytes} = Encryptor.update(enc, chunk2)
+      {:ok, enc, final_bytes} = Encryptor.finalize(enc)
 
+      # Concatenate: header_bytes <> frame1_bytes <> frame2_bytes <> final_bytes
+
+  ## See Also
+
+  - `AwsEncryptionSdk.Stream` - High-level streaming API
+  - `AwsEncryptionSdk.Stream.Decryptor` - Streaming decryption
+  - `AwsEncryptionSdk.Client` - Non-streaming encryption API
   """
 
   alias AwsEncryptionSdk.AlgorithmSuite

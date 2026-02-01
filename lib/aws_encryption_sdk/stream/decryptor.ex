@@ -1,23 +1,120 @@
 defmodule AwsEncryptionSdk.Stream.Decryptor do
   @moduledoc """
-  Streaming decryptor state machine.
+  Streaming decryptor state machine for incremental ciphertext processing.
 
-  Processes ciphertext incrementally and emits plaintext frames. Designed for
-  use with Elixir's Stream functions.
+  ## When to Use Streaming
+
+  Use `Stream.Decryptor` instead of `Client.decrypt/2` when:
+
+  - Decrypting large files that don't fit in memory
+  - Processing encrypted data from network streams
+  - Working with ciphertext sources that produce chunks incrementally
+  - Memory constraints require bounded memory usage
+
+  For small messages (< 1MB), the simpler `Client.decrypt/2` API is recommended.
+
+  ## Memory Efficiency
+
+  The streaming decryptor maintains constant memory usage:
+
+  - Buffers only data needed to parse the current frame
+  - Emits plaintext incrementally after frame authentication
+  - No need to load entire ciphertext into memory
+
+  Memory usage is bounded by the frame size plus header size, regardless of
+  total message size.
+
+  ## Plaintext Verification Status
+
+  Decrypted plaintext is tagged with verification status:
+
+  - **`:verified`** - Plaintext is authenticated and safe to use
+    - For unsigned suites: immediately after frame authentication
+    - For signed suites: after signature verification completes
+
+  - **`:unverified`** - Plaintext not yet cryptographically verified
+    - Only for signed algorithm suites
+    - Signature verification happens at end of stream
+    - **Do not use unverified plaintext** until signature validates
+
+  ### Handling Signed Suites
+
+  For signed algorithm suites (ECDSA P-384), you must handle verification:
+
+  **Option 1: Fail immediately** (safest):
+
+      {:ok, dec} = Decryptor.init(
+        get_materials: materials_fn,
+        fail_on_signed: true
+      )
+
+  **Option 2: Buffer unverified plaintext** (for streaming):
+
+      plaintexts = []
+      for {plaintext, status} <- decrypted_chunks do
+        case status do
+          :verified -> use_plaintext(plaintext)
+          :unverified -> plaintexts = [plaintext | plaintexts]
+        end
+      end
+      # At end of stream, all buffered plaintext is verified
+
+  **Option 3: Use high-level API** (recommended):
+
+  Use `AwsEncryptionSdk.Stream.decrypt/3` which handles verification automatically.
+
+  ## Integration with Elixir Streams
+
+  Designed to work seamlessly with `Stream` module:
+
+      File.stream!("encrypted.bin", [], 4096)
+      |> AwsEncryptionSdk.Stream.decrypt(client)
+      |> Stream.map(fn {plaintext, _status} -> plaintext end)
+      |> Stream.into(File.stream!("decrypted.bin"))
+      |> Stream.run()
+
+  See `AwsEncryptionSdk.Stream` for high-level streaming API.
 
   ## State Machine
+
+  The decryptor progresses through these states:
 
   1. `:init` - Not started, awaiting ciphertext
   2. `:reading_header` - Accumulating header bytes
   3. `:decrypting` - Processing frames
-  4. `:reading_footer` - Accumulating footer (signed suites)
+  4. `:reading_footer` - Accumulating footer (signed suites only)
   5. `:done` - Decryption complete
+
+  ## Low-Level Example
+
+  For custom streaming logic, use the state machine directly:
+
+      get_materials = fn header ->
+        # Obtain decryption materials from CMM
+        cmm.get_decryption_materials(...)
+      end
+
+      {:ok, dec} = Decryptor.init(get_materials: get_materials)
+
+      # Process ciphertext chunks
+      {:ok, dec, plaintexts1} = Decryptor.update(dec, chunk1)
+      {:ok, dec, plaintexts2} = Decryptor.update(dec, chunk2)
+      {:ok, dec, final_plaintexts} = Decryptor.finalize(dec)
+
+      # Each plaintexts is a list of {binary, :verified | :unverified} tuples
 
   ## Security
 
-  For unsigned suites, plaintext is released immediately after frame authentication.
-  For signed suites, see `:fail_on_signed` option.
+  - Never release unauthenticated plaintext to untrusted contexts
+  - For signed suites, verify signature before using plaintext
+  - The decryptor validates authentication tags before emitting plaintext
+  - Commitment verification happens during header processing
 
+  ## See Also
+
+  - `AwsEncryptionSdk.Stream` - High-level streaming API
+  - `AwsEncryptionSdk.Stream.Encryptor` - Streaming encryption
+  - `AwsEncryptionSdk.Client` - Non-streaming decryption API
   """
 
   alias AwsEncryptionSdk.AlgorithmSuite

@@ -87,11 +87,13 @@ defmodule AwsEncryptionSdk.MixProject do
         "README.md": [title: "Overview"],
         "CHANGELOG.md": [title: "Changelog"],
         "CONTRIBUTING.md": [title: "Contributing"],
+        "guides/STABILITY.md": [title: "API Stability Policy"],
         LICENSE: [title: "License"]
       ],
       groups_for_modules: [
         "Core API": [
           AwsEncryptionSdk,
+          AwsEncryptionSdk.Client,
           AwsEncryptionSdk.Encrypt,
           AwsEncryptionSdk.Decrypt,
           AwsEncryptionSdk.AlgorithmSuite
@@ -105,12 +107,53 @@ defmodule AwsEncryptionSdk.MixProject do
           AwsEncryptionSdk.Format.Message,
           AwsEncryptionSdk.Format.Header,
           AwsEncryptionSdk.Format.Body,
+          AwsEncryptionSdk.Format.BodyAad,
+          AwsEncryptionSdk.Format.EncryptionContext,
           AwsEncryptionSdk.Format.Footer
         ],
         Cryptography: [
           AwsEncryptionSdk.Crypto.AesGcm,
-          AwsEncryptionSdk.Crypto.Hkdf,
+          AwsEncryptionSdk.Crypto.HKDF,
+          AwsEncryptionSdk.Crypto.ECDSA,
+          AwsEncryptionSdk.Crypto.HeaderAuth,
           AwsEncryptionSdk.Crypto.Commitment
+        ],
+        "Keyring Interface": [
+          AwsEncryptionSdk.Keyring.Behaviour
+        ],
+        "Raw Keyrings": [
+          AwsEncryptionSdk.Keyring.RawAes,
+          AwsEncryptionSdk.Keyring.RawRsa,
+          AwsEncryptionSdk.Keyring.Multi
+        ],
+        "KMS Keyrings": [
+          AwsEncryptionSdk.Keyring.AwsKms,
+          AwsEncryptionSdk.Keyring.AwsKmsDiscovery,
+          AwsEncryptionSdk.Keyring.AwsKmsMrk,
+          AwsEncryptionSdk.Keyring.AwsKmsMrkDiscovery
+        ],
+        "KMS Client Interface": [
+          AwsEncryptionSdk.Keyring.KmsClient,
+          AwsEncryptionSdk.Keyring.KmsClient.ExAws,
+          AwsEncryptionSdk.Keyring.KmsClient.Mock,
+          AwsEncryptionSdk.Keyring.KmsKeyArn
+        ],
+        "Cryptographic Materials Managers": [
+          AwsEncryptionSdk.Cmm.Behaviour,
+          AwsEncryptionSdk.Cmm.Default,
+          AwsEncryptionSdk.Cmm.Caching,
+          AwsEncryptionSdk.Cmm.RequiredEncryptionContext
+        ],
+        Caching: [
+          AwsEncryptionSdk.Cache.CryptographicMaterialsCache,
+          AwsEncryptionSdk.Cache.LocalCache,
+          AwsEncryptionSdk.Cache.CacheEntry
+        ],
+        Streaming: [
+          AwsEncryptionSdk.Stream,
+          AwsEncryptionSdk.Stream.Encryptor,
+          AwsEncryptionSdk.Stream.Decryptor,
+          AwsEncryptionSdk.Stream.SignatureAccumulator
         ]
       ],
       formatters: ["html"]
