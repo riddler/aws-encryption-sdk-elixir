@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Full test vector runner executing 2,861 success test vectors via complete decrypt flow (#76)
+- Comprehensive test coverage for all 11 ESDK algorithm suites including committed suites (0x0478, 0x0578)
+- Test vector filtering helpers (success/error tests, raw key tests, encryption algorithm filters)
+- Automatic test vector execution in CI with caching for performance
+- EDK-based key name extraction for accurate keyring configuration
 - Non-AWS encryption examples for local key usage without AWS credentials (#74)
 - Raw AES example demonstrating all key sizes (128/192/256-bit) with encryption context
 - Raw RSA example with all 5 padding schemes and PEM key loading from environment variables
@@ -22,12 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Required Encryption Context example enforcing mandatory context keys for compliance
 
 ### Changed
+- Test vectors now run by default when available, improving from 91.8% to 92.6% code coverage (#76)
+- Header authentication now uses full encryption context with required key filtering for spec compliance (#76)
+- Algorithm suite deprecation warnings removed for cleaner test output (#76)
 - Consolidated CHANGELOG entries to improve readability and scannability (#81)
 - Enhanced streaming module documentation with usage guidance, memory efficiency details, and verification handling (#72)
 - Examples reorganized into complexity-based subdirectories (01_basics, 02_advanced, 03_aws_kms) (#75)
 - Examples README updated with category-based navigation and quick start commands
 
 ### Fixed
+- Header body serialization to include version/type bytes in AAD computation per spec (#76)
+- Required encryption context filtering in header authentication tag computation (#76)
+- CMM test vector helpers to extract key names from EDK provider_info (#76)
+- Dialyzer typespec for `compute_header_auth_tag/4` to allow nil for optional parameter (#76)
 - RSA keyring PEM loading to correctly decode keys using `pem_entry_decode` instead of `der_decode` (#74)
 - All KMS examples updated to use correct Client API format (map-based return values)
 - Client module now supports Caching CMM in dispatch clauses for encryption and decryption (#75)

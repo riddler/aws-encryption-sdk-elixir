@@ -63,7 +63,13 @@ defmodule AwsEncryptionSdk.Encrypt do
          {:ok, message_id} <- generate_message_id(materials.algorithm_suite),
          {:ok, derived_key, commitment_key} <- derive_keys(materials, message_id),
          {:ok, header} <- build_header(materials, message_id, frame_length, commitment_key),
-         {:ok, header_with_tag} <- compute_header_auth_tag(header, derived_key),
+         {:ok, header_with_tag} <-
+           compute_header_auth_tag(
+             header,
+             derived_key,
+             materials.encryption_context,
+             materials.required_encryption_context_keys
+           ),
          {:ok, body_binary} <-
            encrypt_body(plaintext, header_with_tag, derived_key, frame_length),
          {:ok, footer_binary} <- build_footer(materials, header_with_tag, body_binary) do
@@ -110,16 +116,19 @@ defmodule AwsEncryptionSdk.Encrypt do
   defp derive_with_hkdf(suite, plaintext_data_key, message_id) do
     key_length = div(suite.data_key_length, 8)
 
-    # Derive data key
-    data_key_info = derive_key_info(suite)
+    # Per spec, HKDF parameters differ between committed and non-committed suites:
+    # - Committed suites: salt = message_id, info = "DERIVEKEY" + suite_id
+    # - Non-committed suites: salt = nil (zeros), info = suite_id + message_id
+    {salt, data_key_info} = derive_key_params(suite, message_id)
 
     {:ok, derived_key} =
-      HKDF.derive(suite.kdf_hash, plaintext_data_key, message_id, data_key_info, key_length)
+      HKDF.derive(suite.kdf_hash, plaintext_data_key, salt, data_key_info, key_length)
 
-    # Derive commitment key if needed
+    # Derive commitment key if needed (committed suites only)
     commitment_key =
       if suite.commitment_length > 0 do
-        commit_info = "COMMITKEY" <> <<suite.id::16-big>>
+        # Committed suites: salt = message_id, info = "COMMITKEY" (just the label, no suite_id)
+        commit_info = "COMMITKEY"
         {:ok, key} = HKDF.derive(suite.kdf_hash, plaintext_data_key, message_id, commit_info, 32)
         key
       else
@@ -129,12 +138,18 @@ defmodule AwsEncryptionSdk.Encrypt do
     {:ok, derived_key, commitment_key}
   end
 
-  defp derive_key_info(%{commitment_length: 32} = suite) do
-    "DERIVEKEY" <> <<suite.id::16-big>>
+  defp derive_key_params(%{commitment_length: 32} = suite, message_id) do
+    # Committed suites: salt = message_id, info = suite_id + "DERIVEKEY"
+    salt = message_id
+    info = <<suite.id::16-big>> <> "DERIVEKEY"
+    {salt, info}
   end
 
-  defp derive_key_info(suite) do
-    <<suite.id::16-big>>
+  defp derive_key_params(suite, message_id) do
+    # Non-committed HKDF suites: salt = nil (zeros), info = suite_id + message_id
+    salt = nil
+    info = <<suite.id::16-big>> <> message_id
+    {salt, info}
   end
 
   # Build header struct (without auth tag)
@@ -143,8 +158,8 @@ defmodule AwsEncryptionSdk.Encrypt do
   end
 
   # Compute header authentication tag
-  defp compute_header_auth_tag(header, derived_key) do
-    HeaderAuth.compute_header_auth_tag(header, derived_key)
+  defp compute_header_auth_tag(header, derived_key, full_ec, required_ec_keys) do
+    HeaderAuth.compute_header_auth_tag(header, derived_key, full_ec, required_ec_keys)
   end
 
   # Encrypt body into frames

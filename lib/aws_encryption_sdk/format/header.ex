@@ -121,14 +121,16 @@ defmodule AwsEncryptionSdk.Format.Header do
   @spec serialize(t()) :: {:ok, binary()} | {:error, term()}
   def serialize(%__MODULE__{version: 2} = header) do
     with {:ok, body} <- serialize_v2_body(header) do
-      {:ok, <<0x02>> <> body <> header.header_auth_tag}
+      # Version is already included in body
+      {:ok, body <> header.header_auth_tag}
     end
   end
 
   def serialize(%__MODULE__{version: 1} = header) do
     with {:ok, body} <- serialize_v1_body(header) do
       auth_section = <<header.header_iv::binary, header.header_auth_tag::binary>>
-      {:ok, <<0x01, 0x80>> <> body <> auth_section}
+      # Version and type are already included in body
+      {:ok, body <> auth_section}
     end
   end
 
@@ -155,8 +157,11 @@ defmodule AwsEncryptionSdk.Format.Header do
       frame_length = if header.content_type == :non_framed, do: 0, else: header.frame_length
       suite_data = header.algorithm_suite_data || <<0::256>>
 
+      # Version (0x02) must be included in header body
+      # for header authentication tag computation
       body =
         <<
+          0x02::8,
           header.algorithm_suite.id::16-big,
           header.message_id::binary-size(32),
           aad_length::16-big,
@@ -228,8 +233,12 @@ defmodule AwsEncryptionSdk.Format.Header do
       frame_length = if header.content_type == :non_framed, do: 0, else: header.frame_length
       iv_length = header.algorithm_suite.iv_length
 
+      # Version (0x01) and Type (0x80) must be included in header body
+      # for header authentication tag computation
       body =
         <<
+          0x01::8,
+          0x80::8,
           header.algorithm_suite.id::16-big,
           header.message_id::binary-size(16),
           aad_length::16-big,

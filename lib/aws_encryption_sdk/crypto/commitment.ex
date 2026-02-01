@@ -34,8 +34,8 @@ defmodule AwsEncryptionSdk.Crypto.Commitment do
   def verify_commitment(materials, header) do
     suite = materials.algorithm_suite
 
-    # Derive commitment key
-    info = "COMMITKEY" <> <<suite.id::16-big>>
+    # Derive commitment key: salt = message_id, info = "COMMITKEY" (just the label, no suite_id)
+    info = "COMMITKEY"
 
     case HKDF.derive(suite.kdf_hash, materials.plaintext_data_key, header.message_id, info, 32) do
       {:ok, expected_commitment} ->

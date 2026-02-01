@@ -172,8 +172,10 @@ defmodule AwsEncryptionSdk.Format.HeaderTest do
 
       assert {:ok, body} = Header.serialize_body(header)
       assert is_binary(body)
-      # Body should not include the version byte or auth tag
-      refute String.starts_with?(body, <<0x02>>)
+      # Body MUST include the version byte for header authentication per spec
+      # but should not include the auth tag
+      assert String.starts_with?(body, <<0x02>>)
+      refute String.ends_with?(body, header.header_auth_tag)
     end
 
     test "serializes v1 header body without auth section" do

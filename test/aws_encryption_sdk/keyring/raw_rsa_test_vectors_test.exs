@@ -6,7 +6,11 @@ defmodule AwsEncryptionSdk.Keyring.RawRsaTestVectorsTest do
   alias AwsEncryptionSdk.TestSupport.{TestVectorHarness, TestVectorSetup}
 
   @moduletag :test_vectors
-  @moduletag skip: not TestVectorSetup.vectors_available?()
+
+  # Only skip if test vectors are not available
+  if not TestVectorSetup.vectors_available?() do
+    @moduletag :skip
+  end
 
   setup_all do
     case TestVectorSetup.find_manifest("**/manifest.json") do

@@ -319,7 +319,13 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       with {:ok, materials} <- dec.get_materials.(header),
            {:ok, derived_key} <- derive_data_key(materials, header),
            :ok <- verify_commitment(materials, header),
-           :ok <- verify_header_auth_tag(header, derived_key) do
+           :ok <-
+             verify_header_auth_tag(
+               header,
+               derived_key,
+               materials.encryption_context,
+               materials.required_encryption_context_keys
+             ) do
         # Initialize signature accumulator for signed suites
         sig_acc = initialize_signature_accumulator(header)
 
@@ -436,32 +442,42 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
       :hkdf ->
         key_length = div(suite.data_key_length, 8)
-        info = derive_key_info(suite)
+
+        # Per spec, HKDF parameters differ between committed and non-committed suites:
+        # - Committed suites: salt = message_id, info = suite_id + "DERIVEKEY"
+        # - Non-committed suites: salt = nil (zeros), info = suite_id + message_id
+        {salt, info} = derive_key_params(suite, header.message_id)
 
         HKDF.derive(
           suite.kdf_hash,
           materials.plaintext_data_key,
-          header.message_id,
+          salt,
           info,
           key_length
         )
     end
   end
 
-  defp derive_key_info(%{commitment_length: 32} = suite) do
-    "DERIVEKEY" <> <<suite.id::16-big>>
+  defp derive_key_params(%{commitment_length: 32} = suite, message_id) do
+    # Committed suites: salt = message_id, info = suite_id + "DERIVEKEY"
+    salt = message_id
+    info = <<suite.id::16-big>> <> "DERIVEKEY"
+    {salt, info}
   end
 
-  defp derive_key_info(suite) do
-    <<suite.id::16-big>>
+  defp derive_key_params(suite, message_id) do
+    # Non-committed HKDF suites: salt = nil (zeros), info = suite_id + message_id
+    salt = nil
+    info = <<suite.id::16-big>> <> message_id
+    {salt, info}
   end
 
   defp verify_commitment(materials, header) do
     Commitment.verify_commitment(materials, header)
   end
 
-  defp verify_header_auth_tag(header, derived_key) do
-    HeaderAuth.verify_header_auth_tag(header, derived_key)
+  defp verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys) do
+    HeaderAuth.verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys)
   end
 
   defp decrypt_frame(frame, dec) do
