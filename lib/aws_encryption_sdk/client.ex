@@ -26,6 +26,9 @@ defmodule AwsEncryptionSdk.Client do
       # Limit encrypted data keys
       client = Client.new(cmm, max_encrypted_data_keys: 3)
 
+  For component selection guidance, see the [Choosing Components](choosing-components.html) guide.
+  For security recommendations, see [Security Best Practices](security-best-practices.html).
+
   ## Spec Reference
 
   https://github.com/awslabs/aws-encryption-sdk-specification/blob/master/client-apis/client.md

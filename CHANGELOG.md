@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - API Stability Policy guide documenting semantic versioning and breaking change policy (#72)
 - Comprehensive module grouping in Hex docs for all keyrings, CMMs, caching, and streaming modules (#72)
+- User guides for Getting Started, Choosing Components, and Security Best Practices (#73)
+- Automated testing for guide code examples with extraction and validation (#73)
 
 ### Changed
 - Consolidated CHANGELOG entries to improve readability and scannability (#81)
