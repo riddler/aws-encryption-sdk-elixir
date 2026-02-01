@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Error test vector validation suite with 4,240 negative test cases (#77)
+- Compressed EC public key decompression for P-256 and P-384 curves (#77)
+- Multi-curve ECDSA signature verification supporting SHA-256/secp256r1 and SHA-384/secp384r1 (#77)
+- API mismatch test validating unsigned-only streaming decryption mode (#77)
+- Comprehensive error categorization (bit flip, truncation, API mismatch, other) (#77)
 - Full test vector runner executing 2,861 success test vectors via complete decrypt flow (#76)
 - Comprehensive test coverage for all 11 ESDK algorithm suites including committed suites (0x0478, 0x0578)
 - Test vector filtering helpers (success/error tests, raw key tests, encryption algorithm filters)
@@ -36,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples README updated with category-based navigation and quick start commands
 
 ### Fixed
+- ECDSA signature verification now handles compressed EC public keys (0x02/0x03 prefix) (#77)
+- Signature verification uses correct hash algorithm and curve based on algorithm suite (#77)
 - Header body serialization to include version/type bytes in AAD computation per spec (#76)
 - Required encryption context filtering in header authentication tag computation (#76)
 - CMM test vector helpers to extract key names from EDK provider_info (#76)
