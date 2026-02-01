@@ -289,11 +289,9 @@ defmodule AwsEncryptionSdk.Keyring.RawRsa do
   @spec load_public_key_pem(String.t()) :: {:ok, rsa_public_key()} | {:error, term()}
   def load_public_key_pem(pem_string) when is_binary(pem_string) do
     case :public_key.pem_decode(pem_string) do
-      [{:SubjectPublicKeyInfo, der, _not_encrypted}] ->
-        {:ok, :public_key.der_decode(:SubjectPublicKeyInfo, der)}
-
-      [{:RSAPublicKey, der, _not_encrypted}] ->
-        {:ok, :public_key.der_decode(:RSAPublicKey, der)}
+      [{type, _der, _not_encrypted} = entry]
+      when type in [:SubjectPublicKeyInfo, :RSAPublicKey] ->
+        {:ok, :public_key.pem_entry_decode(entry)}
 
       [] ->
         {:error, :invalid_pem_format}
@@ -319,11 +317,8 @@ defmodule AwsEncryptionSdk.Keyring.RawRsa do
   @spec load_private_key_pem(String.t()) :: {:ok, rsa_private_key()} | {:error, term()}
   def load_private_key_pem(pem_string) when is_binary(pem_string) do
     case :public_key.pem_decode(pem_string) do
-      [{:PrivateKeyInfo, der, _not_encrypted}] ->
-        {:ok, :public_key.der_decode(:PrivateKeyInfo, der)}
-
-      [{:RSAPrivateKey, der, _not_encrypted}] ->
-        {:ok, :public_key.der_decode(:RSAPrivateKey, der)}
+      [{type, _der, _not_encrypted} = entry] when type in [:PrivateKeyInfo, :RSAPrivateKey] ->
+        {:ok, :public_key.pem_entry_decode(entry)}
 
       [] ->
         {:error, :invalid_pem_format}

@@ -60,7 +60,7 @@ encrypt_client = Client.new(Default.new(multi_keyring))
 plaintext = "Critical data protected by multiple keys"
 
 IO.puts("\nEncrypting with multi-keyring...")
-{:ok, ciphertext} = Client.encrypt(encrypt_client, plaintext)
+{:ok, result} = Client.encrypt(encrypt_client, plaintext)
 IO.puts("Encrypted! Data key wrapped by both keys.")
 
 # ============================================================
@@ -69,8 +69,8 @@ IO.puts("Encrypted! Data key wrapped by both keys.")
 
 IO.puts("\nDecrypting with primary key only...")
 primary_client = Client.new(Default.new(primary_keyring))
-{:ok, {decrypted, _}} = Client.decrypt(primary_client, ciphertext)
-IO.puts("✓ Decrypted with primary: #{decrypted}")
+{:ok, decrypt_result} = Client.decrypt(primary_client, result.ciphertext)
+IO.puts("✓ Decrypted with primary: #{decrypt_result.plaintext}")
 
 # ============================================================
 # Decrypt with backup key only
@@ -78,8 +78,8 @@ IO.puts("✓ Decrypted with primary: #{decrypted}")
 
 IO.puts("\nDecrypting with backup key only...")
 backup_client = Client.new(Default.new(backup_keyring))
-{:ok, {decrypted, _}} = Client.decrypt(backup_client, ciphertext)
-IO.puts("✓ Decrypted with backup: #{decrypted}")
+{:ok, decrypt_result} = Client.decrypt(backup_client, result.ciphertext)
+IO.puts("✓ Decrypted with backup: #{decrypt_result.plaintext}")
 
 IO.puts("\n✓ Multi-keyring example complete!")
 IO.puts("Data can be decrypted with either key for redundancy.")

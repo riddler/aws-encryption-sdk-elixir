@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Non-AWS encryption examples for local key usage without AWS credentials (#74)
+- Raw AES example demonstrating all key sizes (128/192/256-bit) with encryption context
+- Raw RSA example with all 5 padding schemes and PEM key loading from environment variables
+- Multi-keyring local example showing key redundancy and rotation patterns
 - API Stability Policy guide documenting semantic versioning and breaking change policy (#72)
 - Comprehensive module grouping in Hex docs for all keyrings, CMMs, caching, and streaming modules (#72)
 - User guides for Getting Started, Choosing Components, and Security Best Practices (#73)
@@ -16,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Consolidated CHANGELOG entries to improve readability and scannability (#81)
 - Enhanced streaming module documentation with usage guidance, memory efficiency details, and verification handling (#72)
+
+### Fixed
+- RSA keyring PEM loading to correctly decode keys using `pem_entry_decode` instead of `der_decode` (#74)
+- All KMS examples updated to use correct Client API format (map-based return values)
 
 ## [0.6.0] - 2026-01-31
 

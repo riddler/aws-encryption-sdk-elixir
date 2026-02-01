@@ -48,20 +48,20 @@ IO.puts("Encryption context: #{inspect(encryption_context)}")
 
 # Encrypt
 IO.puts("\nEncrypting...")
-{:ok, ciphertext} = Client.encrypt(client, plaintext,
+{:ok, result} = Client.encrypt(client, plaintext,
   encryption_context: encryption_context
 )
-IO.puts("Encrypted! Ciphertext size: #{byte_size(ciphertext)} bytes")
+IO.puts("Encrypted! Ciphertext size: #{byte_size(result.ciphertext)} bytes")
 
 # Decrypt
 IO.puts("\nDecrypting...")
-{:ok, {decrypted, returned_context}} = Client.decrypt(client, ciphertext)
+{:ok, decrypt_result} = Client.decrypt(client, result.ciphertext)
 
-IO.puts("Decrypted: #{decrypted}")
-IO.puts("Returned context: #{inspect(returned_context)}")
+IO.puts("Decrypted: #{decrypt_result.plaintext}")
+IO.puts("Returned context: #{inspect(decrypt_result.encryption_context)}")
 
 # Verify
-if decrypted == plaintext do
+if decrypt_result.plaintext == plaintext do
   IO.puts("\n✓ Success! Round-trip encryption/decryption verified.")
 else
   IO.puts("\n✗ Error: Decrypted data doesn't match original!")

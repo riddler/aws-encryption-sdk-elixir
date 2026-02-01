@@ -351,9 +351,9 @@ defmodule AwsEncryptionSdk.Keyring.RawRsaTest do
       pem = :public_key.pem_encode([pem_entry])
 
       assert {:ok, loaded_key} = RawRsa.load_public_key_pem(pem)
-      # SubjectPublicKeyInfo decodes to a tuple containing the algorithm and key
+      # SubjectPublicKeyInfo is decoded to the underlying RSAPublicKey
       assert is_tuple(loaded_key)
-      assert elem(loaded_key, 0) == :SubjectPublicKeyInfo
+      assert elem(loaded_key, 0) == :RSAPublicKey
     end
 
     test "load_public_key_pem loads RSAPublicKey format", %{public_key: pub} do
