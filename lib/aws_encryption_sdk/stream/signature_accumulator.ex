@@ -1,18 +1,67 @@
 defmodule AwsEncryptionSdk.Stream.SignatureAccumulator do
   @moduledoc """
-  Incremental signature accumulation for streaming operations.
+  Incremental signature accumulation for streaming ECDSA operations.
 
-  Uses SHA-384 hash accumulation to avoid buffering the entire message
-  for ECDSA signing/verification.
+  ## Purpose
 
-  ## Example
+  Enables ECDSA signing/verification for large messages without buffering
+  the entire message in memory. Used internally by streaming encryption and
+  decryption for signed algorithm suites.
 
+  ## Memory Efficiency
+
+  Instead of buffering the entire message for signing:
+
+  - Accumulates SHA-384 hash state incrementally
+  - Hash state size is constant (64 bytes) regardless of message size
+  - Final signature is computed from hash digest
+
+  This allows signing/verifying messages of any size with constant memory usage.
+
+  ## Signed Algorithm Suites
+
+  The AWS Encryption SDK includes algorithm suites with ECDSA P-384 signatures:
+
+  - `AES_256_GCM_HKDF_SHA512_COMMIT_KEY_ECDSA_P384` (0x0578, default)
+  - `AES_256_GCM_IV12_TAG16_HKDF_SHA384_ECDSA_P384` (0x0378)
+
+  For these suites, the entire message (header + all frames) is signed.
+
+  ## Usage Context
+
+  You typically don't use this module directly. It's used internally by:
+
+  - `AwsEncryptionSdk.Stream.Encryptor` - Accumulates hash during encryption
+  - `AwsEncryptionSdk.Stream.Decryptor` - Verifies signature during decryption
+
+  ## Low-Level Example
+
+  If implementing custom streaming or signature logic:
+
+      # During encryption
       acc = SignatureAccumulator.init()
       acc = SignatureAccumulator.update(acc, header_bytes)
       acc = SignatureAccumulator.update(acc, frame1_bytes)
       acc = SignatureAccumulator.update(acc, frame2_bytes)
       signature = SignatureAccumulator.sign(acc, private_key)
 
+      # During decryption
+      acc = SignatureAccumulator.init()
+      acc = SignatureAccumulator.update(acc, header_bytes)
+      acc = SignatureAccumulator.update(acc, frame1_bytes)
+      acc = SignatureAccumulator.update(acc, frame2_bytes)
+      valid? = SignatureAccumulator.verify(acc, signature, public_key)
+
+  ## Hash Algorithm
+
+  Uses SHA-384 for hash accumulation, matching the ECDSA P-384 curve
+  used by signed algorithm suites.
+
+  ## See Also
+
+  - `AwsEncryptionSdk.Stream.Encryptor` - Streaming encryption
+  - `AwsEncryptionSdk.Stream.Decryptor` - Streaming decryption
+  - `AwsEncryptionSdk.AlgorithmSuite` - Algorithm suite definitions
   """
 
   @type t :: %__MODULE__{
