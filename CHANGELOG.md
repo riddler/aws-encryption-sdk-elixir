@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Required Encryption Context example enforcing mandatory context keys for compliance
 
 ### Changed
+- README updated for v1.0.0 preparation with pre-release messaging removed (#79)
+- Feature list converted to clean presentation without checkmark indicators (#79)
+- Test statistics updated to reflect current 852 passing tests (#79)
+- Documentation section added with links to guides, examples, and API reference (#79)
 - Test vectors now run by default when available, improving from 91.8% to 92.6% code coverage (#76)
 - Header authentication now uses full encryption context with required key filtering for spec compliance (#76)
 - Algorithm suite deprecation warnings removed for cleaner test output (#76)
