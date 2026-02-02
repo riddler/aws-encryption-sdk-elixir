@@ -1,9 +1,7 @@
-> ⚠️ **WORK IN PROGRESS** ⚠️
->
-> This project is in active development and **not ready for production use**.
-> The API is subject to change, and security audits have not been performed.
-> Use at your own risk in development/testing environments only.
-
+[![Hex Version](http://img.shields.io/hexpm/v/aws_encryption_sdk.svg)](https://hex.pm/packages/aws_encryption_sdk)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/aws_encryption_sdk/)
+[![Total Download](https://img.shields.io/hexpm/dt/aws_encryption_sdk.svg)](https://hex.pm/packages/aws_encryption_sdk)
+[![Last Updated](https://img.shields.io/github/last-commit/riddler/aws-encryption-sdk-elixir.svg)](https://github.com/riddler/aws-encryption-sdk-elixir/commits/master)
 [![CI](https://github.com/riddler/aws-encryption-sdk-elixir/actions/workflows/ci.yml/badge.svg)](https://github.com/riddler/aws-encryption-sdk-elixir/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/riddler/aws-encryption-sdk-elixir/branch/main/graph/badge.svg)](https://codecov.io/gh/riddler/aws-encryption-sdk-elixir)
 
@@ -13,36 +11,36 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 
 ## Current Status
 
-**Version**: 0.6.0 (pre-release)
+**Version**: 0.6.0
 
-### Implemented Features
+### Features
 
-- ✅ Algorithm suite definitions (all 11 ESDK suites)
-- ✅ HKDF key derivation per [RFC 5869](https://tools.ietf.org/html/rfc5869)
-- ✅ Message format serialization/deserialization (v1 and v2 headers)
-- ✅ Basic encrypt/decrypt operations
-- ✅ Framed and non-framed body formats
-- ✅ Key commitment verification for committed algorithm suites
-- ✅ Test vector harness for cross-SDK compatibility testing
-- ✅ Keyring behaviour interface
-- ✅ Raw AES keyring
-- ✅ Raw RSA keyring (all 5 padding schemes)
-- ✅ Multi-keyring composition
-- ✅ Cryptographic Materials Manager (CMM) with Default implementation
-- ✅ Client module with commitment policy enforcement
-- ✅ ECDSA signing for signed algorithm suites (P-384)
-- ✅ Support for all 17 algorithm suites
-- ✅ AWS KMS Keyring
-- ✅ AWS KMS Discovery Keyring
-- ✅ AWS KMS MRK Keyring
-- ✅ AWS KMS MRK Discovery Keyring
-- ✅ Streaming encryption/decryption
-- ✅ Caching CMM
-- ✅ Required Encryption Context CMM
+- Algorithm suite definitions (all 17 ESDK suites)
+- HKDF key derivation per [RFC 5869](https://tools.ietf.org/html/rfc5869)
+- Message format serialization/deserialization (v1 and v2 headers)
+- Basic encrypt/decrypt operations
+- Framed and non-framed body formats
+- Key commitment verification for committed algorithm suites
+- Test vector harness for cross-SDK compatibility testing
+- Keyring behaviour interface
+- Raw AES keyring
+- Raw RSA keyring (all 5 padding schemes)
+- Multi-keyring composition
+- Cryptographic Materials Manager (CMM) with Default implementation
+- Client module with commitment policy enforcement
+- ECDSA signing for signed algorithm suites (P-384)
+- Support for all 17 algorithm suites
+- AWS KMS Keyring
+- AWS KMS Discovery Keyring
+- AWS KMS MRK Keyring
+- AWS KMS MRK Discovery Keyring
+- Streaming encryption/decryption
+- Caching CMM
+- Required Encryption Context CMM
 
 ### Test Coverage
 
-- 805 tests passing
+- 852 tests passing
 - 92.6% code coverage
 
 ## Installation
@@ -147,20 +145,19 @@ The SDK uses ExAws for AWS integration. Configure credentials via:
 
 See [examples/](examples/) for complete working examples.
 
+## Documentation
+
+- [Getting Started Guide](guides/getting-started.md) - Quick introduction to encryption basics
+- [Choosing Components](guides/choosing-components.md) - Guide to selecting keyrings and CMMs
+- [Security Best Practices](guides/security-best-practices.md) - Production security guidelines
+- [API Stability Policy](guides/STABILITY.md) - Versioning and compatibility guarantees
+- [Examples](examples/) - Working code examples for all features
+- [API Reference](https://hexdocs.pm/aws_encryption_sdk) - Complete API documentation
+
 ## Requirements
 
 - Elixir 1.16 or later
 - Erlang/OTP 26 or later
-
-## What's Next
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed change history.
-
-**Planned for future releases:**
-
-1. **Full test vector suite** - Complete validation against AWS test vectors
-2. **Cross-SDK interoperability** - Comprehensive testing with other SDKs
-3. **Performance benchmarks** - Optimization and performance analysis
 
 ## Related Projects
 
