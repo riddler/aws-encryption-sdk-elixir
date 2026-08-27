@@ -9,9 +9,12 @@ defmodule AwsEncryptionSdk.Keyring.KmsClientTest do
       assert KmsClient in behaviours
     end
 
-    test "ExAws implements all callbacks" do
-      behaviours = KmsClient.ExAws.__info__(:attributes)[:behaviour]
-      assert KmsClient in behaviours
+    # The ExAws client exists only when the optional AWS deps are installed.
+    if Code.ensure_loaded?(AwsEncryptionSdk.Keyring.KmsClient.ExAws) do
+      test "ExAws implements all callbacks" do
+        behaviours = KmsClient.ExAws.__info__(:attributes)[:behaviour]
+        assert KmsClient in behaviours
+      end
     end
   end
 

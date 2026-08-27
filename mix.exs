@@ -38,21 +38,40 @@ defmodule AwsEncryptionSdk.MixProject do
 
   defp deps do
     [
-      {:jason, "~> 1.4"},
+      {:jason, "~> 1.4"}
+    ] ++
+      aws_kms_deps() ++
+      [
+        {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
+        {:excoveralls, "~> 0.18.5", only: :test},
+        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+        {:doctor, "~> 0.23.0", only: :dev},
+        {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+        {:ex_doc, "~> 0.35", only: :dev, runtime: false},
+        {:ex_quality, "~> 0.2.0", only: [:dev, :test]}
+      ]
+  end
 
-      # AWS KMS client
-      {:ex_aws, "~> 2.7"},
-      {:ex_aws_kms, "~> 2.6"},
-      {:hackney, "~> 4.0"},
-      {:sweet_xml, "~> 0.7"},
-      {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
-      {:excoveralls, "~> 0.18.5", only: :test},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.23.0", only: :dev},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.35", only: :dev, runtime: false},
-      {:ex_quality, "~> 0.2.0", only: [:dev, :test]}
-    ]
+  # The AWS KMS client stack is optional: raw keyrings (RawAes, RawRsa,
+  # Multi over raws) need none of it. Consumers who want the AWS KMS
+  # keyrings add all four to their own deps; everything KMS-shaped in
+  # lib/ compiles itself out when ExAws is absent.
+  #
+  # NO_AWS_DEPS exists for CI only: it drops the stack from this project
+  # so the workflow can prove the raw-keyring path compiles and passes
+  # with none of them present. Running `mix deps.get` with it set will
+  # prune the four from mix.lock - do not commit a lock produced that way.
+  defp aws_kms_deps do
+    if System.get_env("NO_AWS_DEPS") do
+      []
+    else
+      [
+        {:ex_aws, "~> 2.7", optional: true},
+        {:ex_aws_kms, "~> 2.6", optional: true},
+        {:hackney, "~> 4.0", optional: true},
+        {:sweet_xml, "~> 0.7", optional: true}
+      ]
+    end
   end
 
   defp description do

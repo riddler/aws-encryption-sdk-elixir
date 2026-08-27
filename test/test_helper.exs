@@ -10,7 +10,11 @@ alias AwsEncryptionSdk.TestSupport.IntegrationGate
 # Exclude :skip by default. Integration tests make real AWS KMS calls, so
 # they run only when a test key is configured and AWS accepts the
 # credentials - see IntegrationGate for what counts as unconfigured.
-{:ok, _apps} = Application.ensure_all_started(:ex_aws)
+# ex_aws is optional; without it there is nothing to start and the
+# integration gate reports the deps as not installed.
+if Code.ensure_loaded?(ExAws) do
+  {:ok, _apps} = Application.ensure_all_started(:ex_aws)
+end
 
 exclude =
   case IntegrationGate.check() do

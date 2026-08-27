@@ -55,6 +55,32 @@ def deps do
 end
 ```
 
+That is the complete installation for raw-keyring usage (`RawAes`,
+`RawRsa`, and `Multi` compositions of them): fully offline envelope
+encryption in the ESDK message format, with no AWS account, credentials,
+or HTTP stack involved.
+
+### With AWS KMS
+
+The AWS client stack is **optional**. To use the KMS keyrings
+(`AwsKms`, `AwsKmsDiscovery`, `AwsKmsMrk`, `AwsKmsMrkDiscovery`), add
+the four optional dependencies to your own list:
+
+```elixir
+def deps do
+  [
+    {:aws_encryption_sdk, "~> 0.7.0"},
+    {:ex_aws, "~> 2.7"},
+    {:ex_aws_kms, "~> 2.6"},
+    {:hackney, "~> 4.0"},
+    {:sweet_xml, "~> 0.7"}
+  ]
+end
+```
+
+Without them the KMS-backed client module is simply not compiled;
+everything else works unchanged.
+
 ## Usage
 
 ### Basic Encryption with Raw Keyring
@@ -66,7 +92,7 @@ alias AwsEncryptionSdk.Keyring.RawAes
 
 # Create a raw AES keyring
 key = :crypto.strong_rand_bytes(32)
-{:ok, keyring} = RawAes.new(key: key, namespace: "my-app", name: "data-key-1")
+{:ok, keyring} = RawAes.new("my-app", "data-key-1", key, :aes_256_gcm)
 
 # Create CMM and client
 cmm = Default.new(keyring)

@@ -128,3 +128,45 @@ jobs:
           files: cover/excoveralls.json
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  no-aws-deps:
+    name: Raw keyrings without AWS deps
+    runs-on: ubuntu-latest
+    env:
+      # Drops the optional ex_aws/ex_aws_kms/hackney/sweet_xml stack from
+      # deps entirely, proving the raw-keyring path stands alone. See
+      # aws_kms_deps/0 in mix.exs.
+      NO_AWS_DEPS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile without AWS deps
+        run: mix compile --warnings-as-errors
+
+      - name: Cache test vectors
+        uses: actions/cache@v4
+        with:
+          path: test/fixtures/test_vectors
+          key: test-vectors-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: test-vectors-
+
+      - name: Setup test vectors
+        run: |
+          if [ ! -d "test/fixtures/test_vectors/.git" ]; then
+            git clone --depth 1 https://github.com/awslabs/aws-encryption-sdk-test-vectors.git \
+              test/fixtures/test_vectors
+            cd test/fixtures/test_vectors/vectors/awses-decrypt
+            unzip -q python-2.3.0.zip
+          fi
+
+      - name: Run tests without AWS deps
+        run: mix test
