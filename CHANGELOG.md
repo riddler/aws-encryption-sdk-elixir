@@ -25,7 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - AWS KMS integration tests are now excluded automatically when `KMS_KEY_ARN`
-  is not set, instead of failing with credential errors on local runs.
+  is unset or when AWS rejects the configured credentials as unrecognized,
+  instead of failing the suite with errors unrelated to this library.
+  Signature and permission errors still fail, since those can indicate a real
+  regression.
 - Broken `examples/` links in the rendered Hex docs now point to the GitHub
   repository.
 

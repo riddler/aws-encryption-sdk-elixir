@@ -2,17 +2,24 @@
 Code.require_file("support/test_vector_setup.ex", __DIR__)
 Code.require_file("support/test_vector_harness.ex", __DIR__)
 Code.require_file("support/guide_code_extractor.ex", __DIR__)
+Code.require_file("support/integration_gate.ex", __DIR__)
+
+alias AwsEncryptionSdk.TestSupport.IntegrationGate
 
 # Configure ExUnit
-# Exclude :skip by default
-# Integration tests make real AWS KMS calls, so they only run when a test
-# key is configured (KMS_KEY_ARN plus AWS credentials, as in CI). Force them
-# with: source .env && mix test --only integration
+# Exclude :skip by default. Integration tests make real AWS KMS calls, so
+# they run only when a test key is configured and AWS accepts the
+# credentials - see IntegrationGate for what counts as unconfigured.
+{:ok, _apps} = Application.ensure_all_started(:ex_aws)
+
 exclude =
-  if System.get_env("KMS_KEY_ARN") do
-    [:skip]
-  else
-    [:skip, :integration]
+  case IntegrationGate.check() do
+    :run ->
+      [:skip]
+
+    {:exclude, reason} ->
+      IntegrationGate.print_skip_notice(reason)
+      [:skip, :integration]
   end
 
 ExUnit.configure(exclude: exclude)
