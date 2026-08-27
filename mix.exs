@@ -41,14 +41,14 @@ defmodule AwsEncryptionSdk.MixProject do
       {:jason, "~> 1.4"},
 
       # AWS KMS client
-      {:ex_aws, "~> 2.7"},
-      {:ex_aws_kms, "~> 2.6"},
-      {:hackney, "~> 4.0"},
+      {:ex_aws, "~> 2.5"},
+      {:ex_aws_kms, "~> 2.0"},
+      {:hackney, "~> 1.20"},
       {:sweet_xml, "~> 0.7"},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:excoveralls, "~> 0.18.5", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.23.0", only: :dev},
+      {:doctor, "~> 0.22.0", only: :dev},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:ex_quality, "~> 0.2.0", only: [:dev, :test]}
