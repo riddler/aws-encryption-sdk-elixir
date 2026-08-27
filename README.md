@@ -143,7 +143,7 @@ The SDK uses ExAws for AWS integration. Configure credentials via:
 )
 ```
 
-See [examples/](examples/) for complete working examples.
+See [examples/](https://github.com/riddler/aws-encryption-sdk-elixir/tree/main/examples) for complete working examples.
 
 ## Documentation
 
@@ -151,7 +151,7 @@ See [examples/](examples/) for complete working examples.
 - [Choosing Components](guides/choosing-components.md) - Guide to selecting keyrings and CMMs
 - [Security Best Practices](guides/security-best-practices.md) - Production security guidelines
 - [API Stability Policy](guides/STABILITY.md) - Versioning and compatibility guarantees
-- [Examples](examples/) - Working code examples for all features
+- [Examples](https://github.com/riddler/aws-encryption-sdk-elixir/tree/main/examples) - Working code examples for all features
 - [API Reference](https://hexdocs.pm/aws_encryption_sdk) - Complete API documentation
 
 ## Requirements

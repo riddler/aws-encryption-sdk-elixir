@@ -21,7 +21,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
     request = %{
       encryption_context: %{"tenant" => "acme"},
       commitment_policy: :require_encrypt_require_decrypt,
-      algorithm_suite: suite
+      algorithm_suite: suite,
+      max_plaintext_length: 0
     }
 
     {cmm, request}
@@ -103,7 +104,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
 
       request = %{
         encryption_context: %{"tenant" => "acme"},
-        commitment_policy: :require_encrypt_require_decrypt
+        commitment_policy: :require_encrypt_require_decrypt,
+        max_plaintext_length: 0
       }
 
       {:ok, materials} = Caching.get_encryption_materials(cmm, request)
@@ -131,13 +133,15 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       request1 = %{
         encryption_context: %{"tenant" => "acme"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       request2 = %{
         encryption_context: %{"tenant" => "other"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       {:ok, materials1} = Caching.get_encryption_materials(cmm, request1)
@@ -156,7 +160,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       request = %{
         encryption_context: %{"tenant" => "acme"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
@@ -184,21 +189,126 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
 
       # First call: stores entry with bytes_used=100
       {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
-      # Second call: would be 100+100=200, but 100 >= 100, so refresh
+      # Second call: 100 + 100 would exceed the 100 byte limit, so refresh
       {:ok, materials2} = Caching.get_encryption_materials(cmm, request)
 
       # Different keys = cache refresh triggered
       assert materials1.plaintext_data_key != materials2.plaintext_data_key
     end
 
-    test "handles request without max_plaintext_length" do
-      {cmm, request} = setup_caching_cmm(max_age: 300)
+    test "refuses a request that would cross the byte limit" do
+      {:ok, cache} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+      cmm = Caching.new_with_keyring(keyring, cache, max_age: 300, max_bytes: 100)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      base_request = %{
+        encryption_context: %{"tenant" => "acme"},
+        commitment_policy: :require_encrypt_require_decrypt,
+        algorithm_suite: suite
+      }
+
+      # Leaves the entry at bytes_used = 90, ten bytes below the limit
+      {:ok, materials1} =
+        Caching.get_encryption_materials(cmm, Map.put(base_request, :max_plaintext_length, 90))
+
+      # Exactly reaching the limit is allowed
+      {:ok, materials2} =
+        Caching.get_encryption_materials(cmm, Map.put(base_request, :max_plaintext_length, 10))
+
+      assert materials1.plaintext_data_key == materials2.plaintext_data_key
+
+      # One more byte would cross it, so the data key is refreshed instead
+      {:ok, materials3} =
+        Caching.get_encryption_materials(cmm, Map.put(base_request, :max_plaintext_length, 1))
+
+      assert materials2.plaintext_data_key != materials3.plaintext_data_key
+    end
+
+    test "a request larger than the byte limit is served once, not refetched forever" do
+      {:ok, cache} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+      cmm = Caching.new_with_keyring(keyring, cache, max_age: 300, max_bytes: 100)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      request = %{
+        encryption_context: %{"tenant" => "acme"},
+        commitment_policy: :require_encrypt_require_decrypt,
+        algorithm_suite: suite,
+        max_plaintext_length: 500
+      }
 
       {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
       {:ok, materials2} = Caching.get_encryption_materials(cmm, request)
 
-      # Should still cache with 0 bytes tracked
-      assert materials1.plaintext_data_key == materials2.plaintext_data_key
+      # Each oversized request gets fresh materials rather than looping
+      assert materials1.plaintext_data_key != materials2.plaintext_data_key
+    end
+
+    test "serves exactly max_messages messages before refreshing" do
+      {:ok, cache} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+      cmm = Caching.new_with_keyring(keyring, cache, max_age: 300, max_messages: 3)
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+
+      request = %{
+        encryption_context: %{"tenant" => "acme"},
+        commitment_policy: :require_encrypt_require_decrypt,
+        algorithm_suite: suite,
+        max_plaintext_length: 0
+      }
+
+      keys =
+        Enum.map(1..4, fn _index ->
+          {:ok, materials} = Caching.get_encryption_materials(cmm, request)
+          materials.plaintext_data_key
+        end)
+
+      [first, second, third, fourth] = keys
+
+      assert first == second
+      assert second == third
+      assert third != fourth
+    end
+
+    test "bypasses the cache when max_plaintext_length is absent" do
+      {:ok, cache} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+
+      cmm =
+        Caching.new_with_keyring(keyring, cache,
+          max_age: 300,
+          partition_id: "bypass-partition"
+        )
+
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      context = %{"tenant" => "acme"}
+
+      request = %{
+        encryption_context: context,
+        commitment_policy: :require_encrypt_require_decrypt,
+        algorithm_suite: suite
+      }
+
+      {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
+      {:ok, materials2} = Caching.get_encryption_materials(cmm, request)
+
+      # Fresh materials every call = cache bypass
+      assert materials1.plaintext_data_key != materials2.plaintext_data_key
+
+      # Nothing was stored either
+      cache_id = Caching.compute_encryption_cache_id("bypass-partition", suite, context)
+      assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache, cache_id)
+    end
+
+    test "bypasses the cache when max_plaintext_length is nil" do
+      {cmm, request} = setup_caching_cmm(max_age: 300)
+      request = Map.put(request, :max_plaintext_length, nil)
+
+      {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
+      {:ok, materials2} = Caching.get_encryption_materials(cmm, request)
+
+      assert materials1.plaintext_data_key != materials2.plaintext_data_key
     end
   end
 
@@ -266,7 +376,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       request = %{
         encryption_context: %{"tenant" => "acme"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       {:ok, materials1} = Caching.get_encryption_materials(cmm, request)
@@ -290,7 +401,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       request = %{
         encryption_context: %{"tenant" => "acme"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       {:ok, materials1} = Caching.get_encryption_materials(outer_cmm, request)
@@ -298,6 +410,36 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
 
       # Both caches work independently
       assert materials1.plaintext_data_key == materials2.plaintext_data_key
+    end
+
+    test "nested Caching CMMs both bypass on unknown plaintext length" do
+      {:ok, cache1} = LocalCache.start_link([])
+      {:ok, cache2} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+
+      inner_cmm =
+        Caching.new_with_keyring(keyring, cache1, max_age: 300, partition_id: "inner-part")
+
+      outer_cmm = Caching.new(inner_cmm, cache2, max_age: 300, partition_id: "outer-part")
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      context = %{"tenant" => "acme"}
+
+      request = %{
+        encryption_context: context,
+        commitment_policy: :require_encrypt_require_decrypt,
+        algorithm_suite: suite
+      }
+
+      {:ok, materials1} = Caching.get_encryption_materials(outer_cmm, request)
+      {:ok, materials2} = Caching.get_encryption_materials(outer_cmm, request)
+
+      # The bypassed request propagates through the nesting untouched
+      assert materials1.plaintext_data_key != materials2.plaintext_data_key
+
+      inner_id = Caching.compute_encryption_cache_id("inner-part", suite, context)
+      outer_id = Caching.compute_encryption_cache_id("outer-part", suite, context)
+      assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache1, inner_id)
+      assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache2, outer_id)
     end
   end
 
@@ -312,7 +454,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       request = %{
         encryption_context: %{"tenant" => "acme"},
         commitment_policy: :require_encrypt_require_decrypt,
-        algorithm_suite: suite
+        algorithm_suite: suite,
+        max_plaintext_length: 0
       }
 
       {:ok, materials1} = Caching.get_encryption_materials(cmm1, request)

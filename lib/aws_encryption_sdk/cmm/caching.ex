@@ -22,6 +22,25 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
       default_cmm = Default.new(keyring)
       cmm = Caching.new(default_cmm, cache, max_age: 300)
 
+  ## Usage limits
+
+  Each cache entry tracks how many messages and plaintext bytes it has served.
+  An entry is refreshed (fresh materials fetched and cached) rather than
+  reused when serving the request would exceed `max_messages` or push the
+  entry's cumulative bytes past `max_bytes`, so no entry ever serves more
+  than `max_bytes` bytes. The one exception is a single request larger than
+  `max_bytes` on its own: it is served once with fresh materials by design,
+  and the entry is refreshed on the next request.
+
+  The byte limit is enforced against the request's `:max_plaintext_length`.
+  `AwsEncryptionSdk.Client.encrypt/3` sets it automatically from the
+  plaintext size. Streaming callers must pass `:plaintext_length` to
+  `AwsEncryptionSdk.Stream.encrypt/3` when they know the total size; when a
+  request carries no length, the byte limit cannot be enforced, so this CMM
+  bypasses the cache entirely for that request (the underlying CMM is called
+  and the result is not cached). Decryption is unaffected - usage limits are
+  encrypt-only per the spec.
+
   ## Spec Reference
 
   https://github.com/awslabs/aws-encryption-sdk-specification/blob/master/framework/caching-cmm.md
@@ -140,14 +159,21 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     algorithm_suite = Map.get(request, :algorithm_suite)
     encryption_context = request.encryption_context
 
-    # Identity KDF bypass - never cache deprecated suites
-    if identity_kdf?(algorithm_suite) do
-      call_underlying_cmm_encrypt(cmm.underlying_cmm, request)
-    else
-      cache_id =
-        compute_encryption_cache_id(cmm.partition_id, algorithm_suite, encryption_context)
+    cond do
+      # Identity KDF bypass - never cache deprecated suites
+      identity_kdf?(algorithm_suite) ->
+        call_underlying_cmm_encrypt(cmm.underlying_cmm, request)
 
-      handle_encryption_cache_lookup(cmm, cache_id, request)
+      # Unknown plaintext length bypass - max_bytes cannot be enforced
+      # without a declared length, so the result is never cached
+      not is_integer(Map.get(request, :max_plaintext_length)) ->
+        call_underlying_cmm_encrypt(cmm.underlying_cmm, request)
+
+      true ->
+        cache_id =
+          compute_encryption_cache_id(cmm.partition_id, algorithm_suite, encryption_context)
+
+        handle_encryption_cache_lookup(cmm, cache_id, request)
     end
   end
 
@@ -228,29 +254,31 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   defp identity_kdf?(_suite), do: false
 
   defp handle_encryption_cache_lookup(cmm, cache_id, request) do
+    request_bytes = Map.fetch!(request, :max_plaintext_length)
+
     case LocalCache.get_cache_entry(cmm.cache, cache_id) do
       {:ok, entry} ->
-        if CacheEntry.exceeded_limits?(entry, cmm.max_messages, cmm.max_bytes) do
-          # Limits exceeded, fetch fresh materials
-          fetch_and_cache_encryption_materials(cmm, cache_id, request)
-        else
+        if CacheEntry.can_serve?(entry, request_bytes, cmm.max_messages, cmm.max_bytes) do
           # Cache hit - update usage and return materials
-          bytes = Map.get(request, :max_plaintext_length, 0)
-          LocalCache.update_usage(cmm.cache, cache_id, 1, bytes)
+          LocalCache.update_usage(cmm.cache, cache_id, 1, request_bytes)
           {:ok, entry.materials}
+        else
+          # Limits would be exceeded, fetch fresh materials
+          fetch_and_cache_encryption_materials(cmm, cache_id, request, request_bytes)
         end
 
       {:error, :cache_miss} ->
-        fetch_and_cache_encryption_materials(cmm, cache_id, request)
+        fetch_and_cache_encryption_materials(cmm, cache_id, request, request_bytes)
     end
   end
 
-  defp fetch_and_cache_encryption_materials(cmm, cache_id, request) do
+  defp fetch_and_cache_encryption_materials(cmm, cache_id, request, request_bytes) do
     with {:ok, materials} <- call_underlying_cmm_encrypt(cmm.underlying_cmm, request) do
-      # Store in cache with initial usage
+      # Store in cache with initial usage. The limit is deliberately not
+      # re-checked here: a request larger than max_bytes is served once rather
+      # than looping on refetch, and is refused on the next lookup.
       entry = CacheEntry.new(materials, cmm.max_age)
-      bytes = Map.get(request, :max_plaintext_length, 0)
-      entry = %{entry | messages_used: 1, bytes_used: bytes}
+      entry = %{entry | messages_used: 1, bytes_used: request_bytes}
       LocalCache.put_cache_entry(cmm.cache, cache_id, entry)
       {:ok, materials}
     end

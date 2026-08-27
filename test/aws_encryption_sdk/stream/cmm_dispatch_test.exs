@@ -6,6 +6,7 @@ defmodule AwsEncryptionSdk.Stream.CmmDispatchTest do
   alias AwsEncryptionSdk.Cmm.Caching
   alias AwsEncryptionSdk.Cmm.Default
   alias AwsEncryptionSdk.Cmm.RequiredEncryptionContext
+  alias AwsEncryptionSdk.Format.Header
   alias AwsEncryptionSdk.Keyring.RawAes
   alias AwsEncryptionSdk.Stream
 
@@ -118,6 +119,69 @@ defmodule AwsEncryptionSdk.Stream.CmmDispatchTest do
 
       assert result1 == "Message 1"
       assert result2 == "Message 2"
+    end
+
+    test "without :plaintext_length the cache is bypassed and left empty" do
+      key = :crypto.strong_rand_bytes(32)
+      {:ok, keyring} = RawAes.new("test", "key1", key, :aes_256_gcm)
+
+      default_cmm = Default.new(keyring)
+      {:ok, cache} = LocalCache.start_link([])
+
+      cmm = Caching.new(default_cmm, cache, max_age: 60, partition_id: "stream-partition")
+      client = Client.new(cmm)
+      ec = %{"purpose" => "test"}
+
+      for _round <- 1..2 do
+        ["Message"]
+        |> Stream.encrypt(client, encryption_context: ec)
+        |> Enum.to_list()
+      end
+
+      # No length declared, so nothing was ever cached. The cache id is
+      # derived from the request's context (before the CMM adds the signing
+      # public key), so this probes exactly where an entry would have landed.
+      cache_id = Caching.compute_encryption_cache_id("stream-partition", nil, ec)
+      assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache, cache_id)
+    end
+
+    test "with :plaintext_length materials are cached and bytes_used accumulates" do
+      key = :crypto.strong_rand_bytes(32)
+      {:ok, keyring} = RawAes.new("test", "key1", key, :aes_256_gcm)
+
+      default_cmm = Default.new(keyring)
+      {:ok, cache} = LocalCache.start_link([])
+
+      cmm = Caching.new(default_cmm, cache, max_age: 60, partition_id: "stream-partition")
+      client = Client.new(cmm)
+      ec = %{"purpose" => "test"}
+      plaintext = "Message"
+
+      headers =
+        for _round <- 1..2 do
+          ciphertext =
+            [plaintext]
+            |> Stream.encrypt(client,
+              encryption_context: ec,
+              plaintext_length: byte_size(plaintext)
+            )
+            |> Enum.to_list()
+            |> IO.iodata_to_binary()
+
+          {:ok, header, _rest} = Header.deserialize(ciphertext)
+          header
+        end
+
+      # Cache hit on the second stream reuses the stored materials, so both
+      # messages carry identical EDKs
+      [header1, header2] = headers
+      assert header1.encrypted_data_keys == header2.encrypted_data_keys
+
+      cache_id = Caching.compute_encryption_cache_id("stream-partition", nil, ec)
+
+      {:ok, entry} = LocalCache.get_cache_entry(cache, cache_id)
+      assert entry.messages_used == 2
+      assert entry.bytes_used == 2 * byte_size(plaintext)
     end
   end
 

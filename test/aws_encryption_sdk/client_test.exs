@@ -411,6 +411,42 @@ defmodule AwsEncryptionSdk.ClientTest do
     end
   end
 
+  describe "encrypt/3 with Caching CMM byte limits" do
+    alias AwsEncryptionSdk.Cache.LocalCache
+    alias AwsEncryptionSdk.Cmm.Caching
+
+    defp create_caching_client(max_bytes) do
+      {:ok, cache} = LocalCache.start_link([])
+      keyring = create_test_keyring()
+      cmm = Caching.new_with_keyring(keyring, cache, max_age: 300, max_bytes: max_bytes)
+      Client.new(cmm)
+    end
+
+    test "reuses the data key while under max_bytes" do
+      client = create_caching_client(100)
+      opts = [encryption_context: %{"tenant" => "acme"}]
+
+      # 40 + 40 = 80 bytes, under the limit
+      {:ok, result1} = Client.encrypt(client, :binary.copy("a", 40), opts)
+      {:ok, result2} = Client.encrypt(client, :binary.copy("b", 40), opts)
+
+      # A cache hit returns the same materials, so the same EDKs land in
+      # both message headers
+      assert result1.header.encrypted_data_keys == result2.header.encrypted_data_keys
+    end
+
+    test "refreshes the data key once cumulative bytes cross max_bytes" do
+      client = create_caching_client(100)
+      opts = [encryption_context: %{"tenant" => "acme"}]
+
+      # 60 + 60 would exceed 100 bytes, forcing fresh materials
+      {:ok, result1} = Client.encrypt(client, :binary.copy("a", 60), opts)
+      {:ok, result2} = Client.encrypt(client, :binary.copy("b", 60), opts)
+
+      assert result1.header.encrypted_data_keys != result2.header.encrypted_data_keys
+    end
+  end
+
   describe "error handling" do
     test "returns error for unsupported CMM type" do
       # Create a fake CMM struct that's not Default

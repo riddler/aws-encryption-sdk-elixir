@@ -160,8 +160,6 @@ client = Client.new(cmm)
 
 #### Caching CMM (High Volume)
 
-Note: Caching CMM currently works with the streaming API.
-
 ```elixir
 alias AwsEncryptionSdk.Cmm.Caching
 alias AwsEncryptionSdk.Cache.LocalCache
@@ -172,19 +170,32 @@ alias AwsEncryptionSdk.Stream
 
 # Wrap the keyring with caching
 cmm = Caching.new_with_keyring(keyring, cache,
-  max_age: 300,        # 5 minutes
-  max_messages: 1000   # Re-key after 1000 messages
+  max_age: 300,           # 5 minutes
+  max_messages: 1000,     # Re-key after 1000 messages
+  max_bytes: 100_000_000  # Re-key after 100 MB of plaintext
 )
 
 client = Client.new(cmm)
 
-# Use with streaming API
+# One-shot encrypt uses the cache automatically
+{:ok, result} = Client.encrypt(client, plaintext)
+
+# Streaming needs the total size upfront to use the cache
 ciphertext =
   [plaintext]
-  |> Stream.encrypt(client)
+  |> Stream.encrypt(client, plaintext_length: byte_size(plaintext))
   |> Enum.to_list()
   |> IO.iodata_to_binary()
 ```
+
+The `max_bytes` limit is enforced against each request's declared plaintext
+length. `Client.encrypt/3` declares it automatically. Streaming can only
+declare it when you pass `:plaintext_length`; without that option the limit
+would be unenforceable, so the Caching CMM bypasses its cache for that
+stream and fetches fresh materials instead. No cache entry ever serves more
+than `max_bytes` bytes, with one deliberate exception: a single message
+larger than `max_bytes` on its own is served once (rather than refetching
+forever), and the entry is refreshed on the next request.
 
 #### Required Encryption Context CMM
 
@@ -233,10 +244,13 @@ client = Client.new(cmm)
 cmm = Caching.new_with_keyring(keyring, cache, max_age: 300)
 client = Client.new(cmm)
 
-# Use with Stream API for caching
+# One-shot API uses the cache automatically
+{:ok, result} = Client.encrypt(client, plaintext)
+
+# Streaming needs :plaintext_length to use the cache
 ciphertext =
   [plaintext]
-  |> Stream.encrypt(client)
+  |> Stream.encrypt(client, plaintext_length: byte_size(plaintext))
   |> Enum.to_list()
   |> IO.iodata_to_binary()
 ```

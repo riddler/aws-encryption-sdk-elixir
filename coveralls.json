@@ -5,7 +5,8 @@
   },
   "skip_files": [
     "test/",
-    "lib/mix/tasks/"
+    "lib/mix/tasks/",
+    "lib/aws_encryption_sdk/keyring/kms_client/ex_aws.ex"
   ],
   "terminal_options": {
     "file_column_width": 58

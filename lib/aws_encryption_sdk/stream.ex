@@ -38,6 +38,11 @@ defmodule AwsEncryptionSdk.Stream do
   - `:encryption_context` - Encryption context (default: `%{}`)
   - `:frame_length` - Frame size in bytes (default: 4096)
   - `:algorithm_suite` - Algorithm suite to use (default: from client)
+  - `:plaintext_length` - Total plaintext size in bytes, when known upfront.
+    Required for the Caching CMM to cache materials for this stream: without
+    it the `max_bytes` limit cannot be enforced, so a Caching CMM bypasses
+    its cache and fetches fresh materials from the underlying CMM. Other
+    CMMs ignore this option.
   """
   @spec encrypt(Enumerable.t(), Client.t(), keyword()) :: Enumerable.t()
   def encrypt(plaintext_stream, %Client{} = client, opts \\ []) do
@@ -83,11 +88,21 @@ defmodule AwsEncryptionSdk.Stream do
   defp init_encryptor_for_stream(client, opts) do
     encryption_context = Keyword.get(opts, :encryption_context, %{})
     frame_length = Keyword.get(opts, :frame_length, 4096)
+    plaintext_length = Keyword.get(opts, :plaintext_length)
 
     request = %{
       encryption_context: encryption_context,
       commitment_policy: client.commitment_policy
     }
+
+    # Only declare the length when the caller knows it - an absent key tells
+    # a Caching CMM to bypass its cache rather than track 0 bytes
+    request =
+      if is_integer(plaintext_length) do
+        Map.put(request, :max_plaintext_length, plaintext_length)
+      else
+        request
+      end
 
     with {:ok, materials} <- call_cmm_get_encryption_materials(client.cmm, request) do
       Encryptor.init(materials, frame_length: frame_length)
