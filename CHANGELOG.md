@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-26
+
 ### Changed
 - The AWS client stack (`ex_aws`, `ex_aws_kms`, `hackney`, `sweet_xml`) is
   now **optional**. Raw-keyring consumers get a lean dependency tree with no
@@ -167,7 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimum Elixir version requirement from 1.18 to 1.16
 - Minimum OTP version requirement to 26
 
-## [0.1.0] - 2025-01-12
+## [0.1.0] - 2026-01-12
 
 ### Added
 - Initial project structure with Apache License 2.0 and contribution guidelines (#20)
@@ -177,7 +179,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.4.0...v0.5.0

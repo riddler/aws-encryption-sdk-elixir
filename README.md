@@ -11,7 +11,7 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 
 ## Current Status
 
-**Version**: 0.7.0
+**Version**: 1.0.0
 
 ### Features
 
@@ -50,7 +50,7 @@ Add `aws_encryption_sdk` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:aws_encryption_sdk, "~> 0.7.0"}
+    {:aws_encryption_sdk, "~> 1.0"}
   ]
 end
 ```
