@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The AWS client stack (`ex_aws`, `ex_aws_kms`, `hackney`, `sweet_xml`) is
+  now **optional**. Raw-keyring consumers get a lean dependency tree with no
+  AWS, HTTP, or XML libraries; using the KMS keyrings now requires adding
+  the four dependencies to your own `deps` (see the README's "With AWS KMS"
+  section). The `AwsEncryptionSdk.Keyring.KmsClient.ExAws` module is
+  compiled only when they are present. CI proves the raw-keyring path
+  compiles and passes with none of them installed.
+
+### Fixed
+- README's Raw AES example used a keyword-argument form of `RawAes.new`
+  that does not exist; it now shows the real positional
+  `RawAes.new(namespace, name, key, algorithm)` arity, matching the
+  moduledoc.
 - Caching CMM `max_bytes` is now enforced: `AwsEncryptionSdk.Client.encrypt/3` passes the
   plaintext size to the CMM, and cache entries refresh before serving a
   request that would push cumulative bytes past the limit (previously the
