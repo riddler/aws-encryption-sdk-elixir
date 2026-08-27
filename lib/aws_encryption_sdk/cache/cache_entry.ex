@@ -84,11 +84,18 @@ defmodule AwsEncryptionSdk.Cache.CacheEntry do
   end
 
   @doc """
-  Checks if the cache entry has exceeded usage limits.
+  Checks whether the entry may serve a request of `request_bytes` bytes without
+  exceeding its usage limits.
+
+  The byte limit is checked against the prospective total, so an entry is never
+  reused when doing so would push it past `max_bytes`. A freshly stored entry
+  always serves the request that created it, even when that request alone
+  exceeds `max_bytes`; the entry is then refused on the next lookup.
 
   ## Parameters
 
   - `entry` - The cache entry
+  - `request_bytes` - Bytes the pending request will encrypt
   - `max_messages` - Maximum messages allowed
   - `max_bytes` - Maximum bytes allowed
 
@@ -103,14 +110,18 @@ defmodule AwsEncryptionSdk.Cache.CacheEntry do
       ...>   materials: materials,
       ...>   creation_time: 0,
       ...>   expiry_time: 1000,
-      ...>   messages_used: 100,
-      ...>   bytes_used: 1000
+      ...>   messages_used: 10,
+      ...>   bytes_used: 900
       ...> }
-      iex> CacheEntry.exceeded_limits?(entry, 50, 10000)
+      iex> CacheEntry.can_serve?(entry, 100, 100, 1000)
       true
+      iex> CacheEntry.can_serve?(entry, 101, 100, 1000)
+      false
+
   """
-  @spec exceeded_limits?(t(), non_neg_integer(), non_neg_integer()) :: boolean()
-  def exceeded_limits?(%__MODULE__{} = entry, max_messages, max_bytes) do
-    entry.messages_used >= max_messages or entry.bytes_used >= max_bytes
+  @spec can_serve?(t(), non_neg_integer(), non_neg_integer(), non_neg_integer()) :: boolean()
+  def can_serve?(%__MODULE__{} = entry, request_bytes, max_messages, max_bytes) do
+    entry.messages_used < max_messages and
+      entry.bytes_used + request_bytes <= max_bytes
   end
 end

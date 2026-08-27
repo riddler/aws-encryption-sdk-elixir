@@ -45,47 +45,40 @@ defmodule AwsEncryptionSdk.Cache.CacheEntryTest do
     end
   end
 
-  describe "exceeded_limits?/3" do
-    test "returns false when under limits" do
-      materials = create_test_materials()
-
-      entry = %CacheEntry{
-        materials: materials,
+  describe "can_serve?/4" do
+    defp entry_with(messages_used, bytes_used) do
+      %CacheEntry{
+        materials: create_test_materials(),
         creation_time: 0,
         expiry_time: 1000,
-        messages_used: 10,
-        bytes_used: 1000
+        messages_used: messages_used,
+        bytes_used: bytes_used
       }
-
-      refute CacheEntry.exceeded_limits?(entry, 100, 10_000)
     end
 
-    test "returns true when messages exceeded" do
-      materials = create_test_materials()
-
-      entry = %CacheEntry{
-        materials: materials,
-        creation_time: 0,
-        expiry_time: 1000,
-        messages_used: 100,
-        bytes_used: 0
-      }
-
-      assert CacheEntry.exceeded_limits?(entry, 100, 10_000)
+    test "returns true when under limits" do
+      assert CacheEntry.can_serve?(entry_with(10, 1000), 100, 100, 10_000)
     end
 
-    test "returns true when bytes exceeded" do
-      materials = create_test_materials()
+    test "returns false when messages are exhausted" do
+      refute CacheEntry.can_serve?(entry_with(100, 0), 0, 100, 10_000)
+    end
 
-      entry = %CacheEntry{
-        materials: materials,
-        creation_time: 0,
-        expiry_time: 1000,
-        messages_used: 0,
-        bytes_used: 10_000
-      }
+    test "returns true when the request lands exactly on the byte limit" do
+      assert CacheEntry.can_serve?(entry_with(0, 9_900), 100, 100, 10_000)
+    end
 
-      assert CacheEntry.exceeded_limits?(entry, 100, 10_000)
+    test "returns false when the request would cross the byte limit" do
+      refute CacheEntry.can_serve?(entry_with(0, 9_900), 101, 100, 10_000)
+    end
+
+    test "returns false when a single request exceeds the byte limit outright" do
+      refute CacheEntry.can_serve?(entry_with(0, 0), 10_001, 100, 10_000)
+    end
+
+    test "zero-byte requests are governed by the message limit alone" do
+      assert CacheEntry.can_serve?(entry_with(99, 10_000), 0, 100, 10_000)
+      refute CacheEntry.can_serve?(entry_with(100, 0), 0, 100, 10_000)
     end
   end
 end

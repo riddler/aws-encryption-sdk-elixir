@@ -64,7 +64,11 @@ defmodule AwsEncryptionSdk.Cmm.Behaviour do
 
   - `:algorithm_suite` - Requested algorithm suite (CMM may use default)
   - `:required_encryption_context_keys` - Keys that must be in final context
-  - `:max_plaintext_length` - Maximum plaintext length hint
+  - `:max_plaintext_length` - Maximum plaintext length in bytes for this
+    request. The Caching CMM enforces its `max_bytes` limit against this
+    value; when the key is absent (or `nil`), the Caching CMM bypasses its
+    cache for the request since the limit cannot be enforced without a
+    length. Other CMMs ignore it.
   """
   @type encryption_materials_request :: %{
           required(:encryption_context) => %{String.t() => String.t()},

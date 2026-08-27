@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Caching CMM `max_bytes` is now enforced: `AwsEncryptionSdk.Client.encrypt/3` passes the
+  plaintext size to the CMM, and cache entries refresh before serving a
+  request that would push cumulative bytes past the limit (previously the
+  byte limit never tripped, and entries could overshoot it by one message).
+  Deployments with a low `max_bytes` will see more key provider (KMS) calls -
+  this is the intended security behavior, but may be a cost surprise.
+- Streaming encrypt bypasses the Caching CMM cache unless the new
+  `:plaintext_length` option is passed to `AwsEncryptionSdk.Stream.encrypt/3`, since the byte
+  limit cannot be enforced without a declared length. Callers who know the
+  total size can pass the option to keep caching.
+
+### Removed
+- `CacheEntry.exceeded_limits?/3`, replaced by `CacheEntry.can_serve?/4`,
+  which checks the prospective total rather than already-recorded usage.
+
+### Fixed
+- AWS KMS integration tests are now excluded automatically when `KMS_KEY_ARN`
+  is not set, instead of failing with credential errors on local runs.
+- Broken `examples/` links in the rendered Hex docs now point to the GitHub
+  repository.
+
+### Security
+- Updated hackney to 4.x (with ex_aws 2.7 and ex_aws_kms 2.6) to resolve
+  CR/LF injection and SSRF allowlist bypass advisories (GHSA-j9wq-vxxc-94wf,
+  GHSA-mp55-p8c9-rfw2, GHSA-pj7v-xfvx-wmjq).
+- Updated doctor to 0.23 to pull decimal 3.x, resolving the unbounded
+  exponent DoS advisory (GHSA-rhv4-8758-jx7v).
+
 ## [0.7.0] - 2026-02-01
 
 ### Added

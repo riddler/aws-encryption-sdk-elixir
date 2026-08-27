@@ -172,7 +172,12 @@ defmodule AwsEncryptionSdk.Client do
     with :ok <- validate_encryption_context_for_client(encryption_context),
          :ok <- maybe_validate_requested_suite(requested_suite, client.commitment_policy),
          {:ok, materials} <-
-           get_encryption_materials(client, encryption_context, requested_suite),
+           get_encryption_materials(
+             client,
+             encryption_context,
+             requested_suite,
+             byte_size(plaintext)
+           ),
          :ok <- validate_materials_suite(materials.algorithm_suite, client.commitment_policy),
          :ok <- validate_edk_limit(materials.encrypted_data_keys, client.max_encrypted_data_keys) do
       Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
@@ -335,11 +340,12 @@ defmodule AwsEncryptionSdk.Client do
     CmmBehaviour.validate_commitment_policy_for_encrypt(suite, policy)
   end
 
-  defp get_encryption_materials(client, encryption_context, requested_suite) do
+  defp get_encryption_materials(client, encryption_context, requested_suite, plaintext_length) do
     request = %{
       encryption_context: encryption_context,
       commitment_policy: client.commitment_policy,
-      algorithm_suite: requested_suite
+      algorithm_suite: requested_suite,
+      max_plaintext_length: plaintext_length
     }
 
     # Dispatch to the CMM module based on struct type
