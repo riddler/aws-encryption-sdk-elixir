@@ -5,8 +5,17 @@ Code.require_file("support/guide_code_extractor.ex", __DIR__)
 
 # Configure ExUnit
 # Exclude :skip by default
-# To exclude integration tests locally: mix test --exclude integration
-ExUnit.configure(exclude: [:skip])
+# Integration tests make real AWS KMS calls, so they only run when a test
+# key is configured (KMS_KEY_ARN plus AWS credentials, as in CI). Force them
+# with: source .env && mix test --only integration
+exclude =
+  if System.get_env("KMS_KEY_ARN") do
+    [:skip]
+  else
+    [:skip, :integration]
+  end
+
+ExUnit.configure(exclude: exclude)
 
 ExUnit.start()
 
