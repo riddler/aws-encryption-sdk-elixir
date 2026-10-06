@@ -173,3 +173,54 @@ jobs:
 
       - name: Run tests without AWS deps
         run: mix test
+
+  hackney-1x:
+    name: Host on hackney 1.x (Elixir 1.18 / OTP 26)
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "26"
+
+      # A host already on hackney 1.x (through httpoison) resolves the
+      # SDK with no committed lock, the way a real host would.
+      - name: Resolve the hackney 1.x host
+        working-directory: test/fixtures/hackney1_host
+        run: mix deps.get
+
+      - name: Compile the hackney 1.x host
+        working-directory: test/fixtures/hackney1_host
+        run: mix compile --warnings-as-errors
+
+      - name: Show the host's resolved hackney and ex_aws
+        working-directory: test/fixtures/hackney1_host
+        run: grep -E '^  "(hackney|ex_aws)":' mix.lock | cut -d, -f1-3
+
+      # The SDK's own suite on the same pair. hackney's 4.x-only
+      # transitive pins (certifi, idna, mimerl, parse_trans,
+      # ssl_verify_fun) are unlocked with it so 1.x can resolve. See
+      # aws_kms_deps/0 in mix.exs.
+      - name: Unlock the hackney stack
+        run: HACKNEY_1X=1 mix deps.unlock hackney ex_aws certifi idna mimerl parse_trans ssl_verify_fun
+
+      - name: Install dependencies on hackney 1.x
+        run: |
+          HACKNEY_1X=1 mix deps.get
+          grep -E '^  "(hackney|ex_aws)":' mix.lock | cut -d, -f1-3
+
+      - name: Compile on hackney 1.x
+        run: HACKNEY_1X=1 MIX_ENV=test mix compile --warnings-as-errors
+
+      # KMS integration tests run when the secrets are present; the
+      # integration gate excludes them otherwise and says so in the log.
+      - name: Run tests on hackney 1.x
+        run: HACKNEY_1X=1 mix test --exclude test_vectors

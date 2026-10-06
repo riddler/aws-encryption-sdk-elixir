@@ -68,16 +68,32 @@ defmodule AwsEncryptionSdk.MixProject do
   # calls hackney directly - every KMS request goes through ex_aws - so
   # a host already on hackney 1.x can resolve it. hackney 4.x stays the
   # recommended pair; see the CHANGELOG's Security notes.
+  #
+  # HACKNEY_1X exists for CI only: it narrows the stack to the older
+  # pair (ex_aws 2.6.x on hackney 1.x) so the workflow can run this
+  # project's own suite against it. Running `mix deps.get` with it set
+  # rewrites hackney and ex_aws in mix.lock - do not commit a lock
+  # produced that way.
   defp aws_kms_deps do
-    if System.get_env("NO_AWS_DEPS") do
-      []
-    else
-      [
-        {:ex_aws, "~> 2.6", optional: true},
-        {:ex_aws_kms, "~> 2.5", optional: true},
-        {:hackney, "~> 1.21 or ~> 4.0", optional: true},
-        {:sweet_xml, "~> 0.7", optional: true}
-      ]
+    cond do
+      System.get_env("NO_AWS_DEPS") ->
+        []
+
+      System.get_env("HACKNEY_1X") ->
+        [
+          {:ex_aws, "~> 2.6.0", optional: true},
+          {:ex_aws_kms, "~> 2.5", optional: true},
+          {:hackney, "~> 1.21", optional: true},
+          {:sweet_xml, "~> 0.7", optional: true}
+        ]
+
+      true ->
+        [
+          {:ex_aws, "~> 2.6", optional: true},
+          {:ex_aws_kms, "~> 2.5", optional: true},
+          {:hackney, "~> 1.21 or ~> 4.0", optional: true},
+          {:sweet_xml, "~> 0.7", optional: true}
+        ]
     end
   end
 
