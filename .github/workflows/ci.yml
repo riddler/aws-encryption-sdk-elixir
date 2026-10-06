@@ -56,6 +56,9 @@ jobs:
           # Middle ground
           - elixir: "1.17"
             otp: "26"
+          # Newest Elixir on the oldest supported OTP
+          - elixir: "1.18"
+            otp: "26"
           # Latest (with coverage upload)
           - elixir: "1.18"
             otp: "27"
