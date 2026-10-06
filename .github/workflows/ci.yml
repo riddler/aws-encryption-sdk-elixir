@@ -205,12 +205,15 @@ jobs:
         working-directory: test/fixtures/hackney1_host
         run: grep -E '^  "(hackney|ex_aws)":' mix.lock | cut -d, -f1-3
 
-      # The SDK's own suite on the same pair. hackney's 4.x-only
-      # transitive pins (certifi, idna, mimerl, parse_trans,
-      # ssl_verify_fun) are unlocked with it so 1.x can resolve. See
-      # aws_kms_deps/0 in mix.exs.
+      # The SDK's own suite on the same pair. Three of hackney's
+      # dependencies are locked at versions hackney 1.x refuses, so they
+      # are unlocked with it: parse_trans (1.x pins exactly 3.4.1), idna
+      # (1.x wants ~> 6.1.0) and certifi (1.x wants ~> 2.15.0). The locked
+      # mimerl and ssl_verify_fun already satisfy 1.x and stay as locked;
+      # packages only 1.x needs are added by deps.get. See aws_kms_deps/0
+      # in mix.exs.
       - name: Unlock the hackney stack
-        run: HACKNEY_1X=1 mix deps.unlock hackney ex_aws certifi idna mimerl parse_trans ssl_verify_fun
+        run: HACKNEY_1X=1 mix deps.unlock hackney ex_aws parse_trans idna certifi
 
       - name: Install dependencies on hackney 1.x
         run: |
