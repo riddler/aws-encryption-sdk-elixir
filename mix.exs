@@ -1,7 +1,7 @@
 defmodule AwsEncryptionSdk.MixProject do
   use Mix.Project
 
-  @version "1.0.0"
+  @version "1.0.1"
   @source_url "https://github.com/riddler/aws-encryption-sdk-elixir"
 
   def project do
