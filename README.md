@@ -69,14 +69,19 @@ the four optional dependencies to your own list:
 ```elixir
 def deps do
   [
-    {:aws_encryption_sdk, "~> 0.7.0"},
-    {:ex_aws, "~> 2.7"},
-    {:ex_aws_kms, "~> 2.6"},
-    {:hackney, "~> 4.0"},
+    {:aws_encryption_sdk, "~> 1.0"},
+    {:ex_aws, "~> 2.6"},
+    {:ex_aws_kms, "~> 2.5"},
+    {:hackney, "~> 1.21 or ~> 4.0"},
     {:sweet_xml, "~> 0.7"}
   ]
 end
 ```
+
+The range admits hosts already on hackney 1.x (with ex_aws 2.6), which
+carries the advisories listed in the CHANGELOG; the SDK's KMS requests
+use none of the affected options, and hackney 4.x (with ex_aws 2.7)
+stays recommended.
 
 Without them the KMS-backed client module is simply not compiled;
 everything else works unchanged.
