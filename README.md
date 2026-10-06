@@ -11,7 +11,7 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 
 ## Current Status
 
-**Version**: 1.0.0
+**Version**: 1.0.1
 
 ### Features
 

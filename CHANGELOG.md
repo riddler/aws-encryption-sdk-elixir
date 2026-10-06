@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-06
+
 ### Added
 - A `hackney-1x` CI job on Elixir 1.18 / OTP 26: a fixture host on
   hackney 1.x (`test/fixtures/hackney1_host`, no committed lock) resolves
   the SDK and compiles a call into its ExAws KMS client, and the SDK's own
   suite runs on ex_aws 2.6 with hackney 1.x through the CI-only
   `HACKNEY_1X` switch in `mix.exs`.
+- A release workflow (`.github/workflows/release.yml`): pushing a `v*.*.*`
+  tag publishes to Hex only when the tagged commit is on the default
+  branch, the tag names the `@version` in `mix.exs`, Hex does not already
+  show that version, and the full quality gate is green there.
 
 ### Changed
 - The optional KMS client stack now accepts hackney 1.x with ex_aws 2.6
@@ -207,7 +213,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.5.0...v0.6.0
