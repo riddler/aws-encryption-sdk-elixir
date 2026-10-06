@@ -61,14 +61,21 @@ defmodule AwsEncryptionSdk.MixProject do
   # so the workflow can prove the raw-keyring path compiles and passes
   # with none of them present. Running `mix deps.get` with it set will
   # prune the four from mix.lock - do not commit a lock produced that way.
+  #
+  # The ex_aws and hackney ranges admit two coherent pairs: ex_aws 2.6.x
+  # on hackney 1.x, and ex_aws 2.7+ on hackney 4.x (ex_aws itself pins
+  # the hackney major for each). The SDK accepts both because it never
+  # calls hackney directly - every KMS request goes through ex_aws - so
+  # a host already on hackney 1.x can resolve it. hackney 4.x stays the
+  # recommended pair; see the CHANGELOG's Security notes.
   defp aws_kms_deps do
     if System.get_env("NO_AWS_DEPS") do
       []
     else
       [
-        {:ex_aws, "~> 2.7", optional: true},
-        {:ex_aws_kms, "~> 2.6", optional: true},
-        {:hackney, "~> 4.0", optional: true},
+        {:ex_aws, "~> 2.6", optional: true},
+        {:ex_aws_kms, "~> 2.5", optional: true},
+        {:hackney, "~> 1.21 or ~> 4.0", optional: true},
         {:sweet_xml, "~> 0.7", optional: true}
       ]
     end

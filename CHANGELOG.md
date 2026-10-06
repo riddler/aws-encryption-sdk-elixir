@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The optional KMS client stack now accepts hackney 1.x with ex_aws 2.6
+  as well as hackney 4.x with ex_aws 2.7 (`{:hackney, "~> 1.21 or ~> 4.0"}`,
+  `{:ex_aws, "~> 2.6"}`), and ex_aws_kms 2.5 (`{:ex_aws_kms, "~> 2.5"}`).
+  A host already on hackney 1.x can resolve this package again; 1.0.0
+  refused it. The README's "With AWS KMS" snippet shows the new ranges and
+  the current `~> 1.0` requirement.
+
+### Security
+- The three hackney advisories 1.0.0 cites (GHSA-j9wq-vxxc-94wf,
+  GHSA-mp55-p8c9-rfw2, GHSA-pj7v-xfvx-wmjq) are fixed only in hackney
+  4.0.1 and later; a host on hackney 1.x keeps them. The SDK does not
+  install hackney 1.x, it stops refusing hosts that already hold it, and
+  its KMS requests use none of the affected options: no cookie options,
+  no caller-built query strings, no proxy allowlist, no SOCKS5. hackney
+  4.x stays the recommended pair.
+
 ## [1.0.0] - 2026-08-26
 
 ### Changed
