@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-07
+
 ### Changed
 - CI and the release workflow fetch the test vectors
   (awslabs/aws-encryption-sdk-test-vectors) at one pinned commit,
@@ -266,7 +268,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.6.0...v0.7.0
