@@ -76,6 +76,24 @@ defmodule AwsEncryptionSdk.Decrypt do
     end
   end
 
+  @doc false
+  # Derives the data key from `materials` and checks the key commitment and
+  # the header authentication tag of `header`, without reading the body.
+  # `AwsEncryptionSdk.Client` uses it to pick which decryption materials
+  # authenticate a header before any body bytes are decrypted.
+  @spec verify_header(Header.t(), DecryptionMaterials.t()) :: :ok | {:error, term()}
+  def verify_header(%Header{} = header, %DecryptionMaterials{} = materials) do
+    with {:ok, derived_key} <- derive_data_key(materials, header),
+         :ok <- verify_commitment(materials, header, derived_key) do
+      verify_header_auth_tag(
+        header,
+        derived_key,
+        materials.encryption_context,
+        materials.required_encryption_context_keys
+      )
+    end
+  end
+
   # The whole input must be exactly one message: bytes after its end are an
   # error, never ignored (the streaming decryptor refuses them in
   # finalize/1 the same way).

@@ -278,7 +278,7 @@ defmodule AwsEncryptionSdk.Client do
          :ok <-
            validate_algorithm_suite_for_decrypt(header.algorithm_suite, client.commitment_policy),
          :ok <- validate_edk_count_for_decrypt(header, client.max_encrypted_data_keys),
-         {:ok, materials} <- get_decryption_materials(client, header, reproduced_context) do
+         {:ok, materials} <- decryption_materials_for_header(client, header, reproduced_context) do
       Decrypt.decrypt(ciphertext, materials)
     end
   end
@@ -400,6 +400,70 @@ defmodule AwsEncryptionSdk.Client do
       {:error, :too_many_encrypted_data_keys}
     end
   end
+
+  @doc false
+  # Obtains decryption materials for a parsed header and checks that they
+  # authenticate it (`AwsEncryptionSdk.Decrypt.verify_header/2`). Shared by
+  # `decrypt/3` and `AwsEncryptionSdk.Stream.decrypt/3`.
+  #
+  # The default CMM appends the reproduced pairs the header does not store
+  # before the keyring unwraps and makes them the decrypt-side required set
+  # (the specification's form), and retries the unwrap once under the
+  # stored context alone when it fails. A keyring that does not bind the
+  # context (raw RSA) unwraps under any claim, so a key the writer never
+  # bound surfaces here instead, as a header authentication failure. In that
+  # one case (header authentication failed with materials whose required set
+  # holds a reproduced key the header does not store) the materials are
+  # requested ONCE more with the reproduced context limited to the keys the
+  # header stores: the read versions before 1.1.0 made. When that fails too,
+  # the FIRST failure is returned.
+  #
+  # The retry never weakens a refusal: a wrong value for a key the header
+  # stores is refused by the CMM on both attempts, and a key the writer
+  # bound but did not store is absent from the retry, so the retry's header
+  # authentication (or a required-context CMM) refuses it.
+  @spec decryption_materials_for_header(t(), Header.t(), map() | nil) ::
+          {:ok, AwsEncryptionSdk.Materials.DecryptionMaterials.t()} | {:error, term()}
+  def decryption_materials_for_header(%__MODULE__{} = client, header, reproduced_context) do
+    with {:ok, materials} <- get_decryption_materials(client, header, reproduced_context) do
+      case Decrypt.verify_header(header, materials) do
+        :ok ->
+          {:ok, materials}
+
+        {:error, :header_authentication_failed} = first_error ->
+          if appended_unstored_key?(header, reproduced_context, materials) do
+            retry_under_stored_context(client, header, reproduced_context, first_error)
+          else
+            first_error
+          end
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp retry_under_stored_context(client, header, reproduced_context, first_error) do
+    stored_only = Map.take(reproduced_context, Map.keys(header.encryption_context))
+
+    with {:ok, materials} <- get_decryption_materials(client, header, stored_only),
+         :ok <- Decrypt.verify_header(header, materials) do
+      {:ok, materials}
+    else
+      _retry_failed -> first_error
+    end
+  end
+
+  defp appended_unstored_key?(header, reproduced_context, materials)
+       when is_map(reproduced_context) do
+    required = materials.required_encryption_context_keys
+
+    Enum.any?(Map.keys(reproduced_context), fn key ->
+      not Map.has_key?(header.encryption_context, key) and key in required
+    end)
+  end
+
+  defp appended_unstored_key?(_header, _reproduced_context, _materials), do: false
 
   # Builds request and dispatches to CMM to get decryption materials
   defp get_decryption_materials(client, header, reproduced_context) do

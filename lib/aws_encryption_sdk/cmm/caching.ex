@@ -288,8 +288,10 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     case LocalCache.get_cache_entry(cmm.cache, cache_id) do
       {:ok, entry} ->
         # Decryption doesn't track usage limits
-        with :ok <- check_bound_context(entry.materials, request) do
+        if bound_context_agrees?(entry.materials, request) do
           {:ok, entry.materials}
+        else
+          fetch_and_cache_decryption_materials(cmm, cache_id, request)
         end
 
       {:error, :cache_miss} ->
@@ -297,45 +299,38 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     end
   end
 
-  # The decryption cache id hashes the STORED context only, so a required
-  # key a message does not store is not part of it: two readers that claim
-  # different values for such a key share one entry. Before serving a hit,
-  # the reproduced context is compared with the cached materials' context on
-  # the keys the entry bound (the stored keys plus the cached required set),
-  # and the read is refused where a cold read would have been:
+  # The decryption cache id hashes the STORED context only, so a key a
+  # message does not store is not part of it: readers that reproduce
+  # different values for such a key, or different keys, share one entry.
+  # A hit is served only when it is what a cold read with this request
+  # would produce:
   #
-  #   * a reproduced value that differs from the bound value;
-  #   * a required key the entry bound that is absent from the stored context
-  #     and that this reader does not reproduce (a cold read could not unwrap
-  #     the data key without it).
+  #   * every reproduced value for a stored key equals the stored value;
+  #   * the reproduced pairs the header does not store are exactly the
+  #     pairs the cached entry bound outside the header (its required keys
+  #     absent from the stored context, with their values).
   #
-  # A reproduced key the entry did not bind is not compared, as on a cold
-  # read. The cache id, and so the hit rate, is unchanged.
-  defp check_bound_context(materials, request) do
+  # Otherwise the hit is not served and the request goes the cache-miss way:
+  # the cold read decides, and on success replaces the entry. So a failed
+  # read that populated the cache (a keyring that does not bind the context
+  # unwraps under any claim; header authentication fails later) never makes
+  # a correct reader fail, and a disagreeing reader is refused by the same
+  # unwrap or header authentication as on a cold read. The cache id, and so
+  # the hit rate for agreeing readers, is unchanged.
+  defp bound_context_agrees?(materials, request) do
     reproduced = Map.get(request, :reproduced_encryption_context) || %{}
     stored = request.encryption_context
-    cached_context = materials.encryption_context
-    required = materials.required_encryption_context_keys || []
-    bound_keys = Enum.uniq(Map.keys(stored) ++ required)
 
-    mismatch =
-      Enum.find(bound_keys, fn key ->
-        case Map.fetch(reproduced, key) do
-          {:ok, value} -> Map.get(cached_context, key) != value
-          :error -> false
-        end
-      end)
+    stored_agrees? =
+      Enum.all?(Map.take(reproduced, Map.keys(stored)), fn {k, v} -> stored[k] == v end)
 
-    missing =
-      Enum.filter(required, fn key ->
-        not Map.has_key?(stored, key) and not Map.has_key?(reproduced, key)
-      end)
+    bound_outside_header =
+      Map.take(
+        materials.encryption_context,
+        (materials.required_encryption_context_keys || []) -- Map.keys(stored)
+      )
 
-    cond do
-      mismatch != nil -> {:error, {:encryption_context_mismatch, mismatch}}
-      missing != [] -> {:error, {:missing_required_encryption_context_keys, Enum.sort(missing)}}
-      true -> :ok
-    end
+    stored_agrees? and Map.drop(reproduced, Map.keys(stored)) == bound_outside_header
   end
 
   defp fetch_and_cache_decryption_materials(cmm, cache_id, request) do
