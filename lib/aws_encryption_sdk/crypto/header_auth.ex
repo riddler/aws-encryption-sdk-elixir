@@ -14,6 +14,13 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   Builds a header struct (without auth tag) from encryption materials.
 
   Returns a header with a placeholder auth tag that must be computed separately.
+
+  The header stores the materials' encryption context minus every key in
+  the materials' required encryption context keys: those pairs are only
+  authenticated (as the tail of the header-authentication AAD, see
+  `compute_header_auth_tag/4`), never stored. Messages written before 1.1.0
+  stored them as well; `AwsEncryptionSdk.Cmm.RequiredEncryptionContext`
+  still reads that form.
   """
   @spec build_header(
           AwsEncryptionSdk.Materials.EncryptionMaterials.t(),
@@ -32,7 +39,7 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
       version: suite.message_format_version,
       algorithm_suite: suite,
       message_id: message_id,
-      encryption_context: materials.encryption_context,
+      encryption_context: stored_encryption_context(materials),
       encrypted_data_keys: materials.encrypted_data_keys,
       content_type: :framed,
       frame_length: frame_length,
@@ -43,6 +50,13 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
     }
 
     {:ok, header}
+  end
+
+  # The specification's "Construct the header" (client-apis/encrypt.md): the
+  # stored context MUST NOT contain any pair listed in the materials'
+  # required encryption context keys.
+  defp stored_encryption_context(materials) do
+    Map.drop(materials.encryption_context, materials.required_encryption_context_keys || [])
   end
 
   @doc """

@@ -47,3 +47,14 @@ Key files:
 - `keys.json` - Key material for test decryption
 - `ciphertexts/` - Pre-encrypted test data
 - `plaintexts/` - Expected plaintext outputs
+
+## Committed message fixtures
+
+- `pre_1_1_messages/` - messages this SDK wrote before 1.1.0 (required
+  encryption context keys stored in the header; the uncompressed
+  verification key), asserted to still decrypt.
+- `conforming_messages/` - messages the AWS Encryption SDK for Python wrote
+  with required encryption context keys left out of the header, asserted to
+  decrypt.
+
+Each directory's README says how its files were made.

@@ -16,6 +16,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every workflow edit missed it, and its fallback could restore a clone
   the setup step then kept.
 
+### Fixed
+- Messages with required encryption context keys no longer store those
+  keys in the header, as the specification requires; messages written by
+  earlier versions still decrypt. The keys are still authenticated (the
+  tail of the header-authentication AAD) and still bound into the encrypted
+  data keys. A message another SDK writes with required keys left out of
+  the header now decrypts: the default CMM appends the reproduced pairs
+  absent from the header before the keyring unwraps, puts their keys in the
+  required set, and retries once under the stored context alone when that
+  unwrap fails, which keeps a message readable when a caller passes a key
+  the message never carried. A message written before this version is read
+  through `Cmm.RequiredEncryptionContext`, whose configured keys still join
+  the decrypt-side required set.
+- Signed suites write the signature verification key
+  (`aws-crypto-public-key`) as the SEC 1 compressed point the specification
+  requires, instead of the uncompressed point; both forms still read, so
+  every signed message an earlier version wrote still verifies. Another SDK
+  can now read a signed message this SDK writes.
+- `Cmm.Caching` checks a decryption cache hit against the reproduced
+  encryption context before serving it: a reproduced value that differs
+  from one the cached entry bound, or a required key the entry bound
+  outside the header that the reader does not reproduce, is refused as a
+  cold read would refuse it (#96). The cache id is unchanged.
+- Decrypt returns `{:error, :trailing_bytes}` for a message followed by
+  trailing bytes, through `Client.decrypt/3`, `decrypt_with_keyring/3` and
+  decrypt with materials, instead of a three-element `{:ok, message, rest}`
+  tuple. The streaming decryptor already refused them.
+- The header bytes change for every new message with required encryption
+  context keys (the required pairs leave the stored context) and for every
+  new message on a signed suite (the verification key is 64 base64
+  characters shorter).
+- A 1.0.x reader cannot decrypt a message this version writes with required
+  encryption context keys. Upgrade every reader before any writer; a
+  rollback to 1.0.x strands those messages until the reader is upgraded
+  again (nothing is lost: this version reads them).
+
 ## [1.0.1] - 2026-10-06
 
 ### Added

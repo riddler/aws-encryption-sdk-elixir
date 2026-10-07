@@ -288,10 +288,53 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     case LocalCache.get_cache_entry(cmm.cache, cache_id) do
       {:ok, entry} ->
         # Decryption doesn't track usage limits
-        {:ok, entry.materials}
+        with :ok <- check_bound_context(entry.materials, request) do
+          {:ok, entry.materials}
+        end
 
       {:error, :cache_miss} ->
         fetch_and_cache_decryption_materials(cmm, cache_id, request)
+    end
+  end
+
+  # The decryption cache id hashes the STORED context only, so a required
+  # key a message does not store is not part of it: two readers that claim
+  # different values for such a key share one entry. Before serving a hit,
+  # the reproduced context is compared with the cached materials' context on
+  # the keys the entry bound (the stored keys plus the cached required set),
+  # and the read is refused where a cold read would have been:
+  #
+  #   * a reproduced value that differs from the bound value;
+  #   * a required key the entry bound that is absent from the stored context
+  #     and that this reader does not reproduce (a cold read could not unwrap
+  #     the data key without it).
+  #
+  # A reproduced key the entry did not bind is not compared, as on a cold
+  # read. The cache id, and so the hit rate, is unchanged.
+  defp check_bound_context(materials, request) do
+    reproduced = Map.get(request, :reproduced_encryption_context) || %{}
+    stored = request.encryption_context
+    cached_context = materials.encryption_context
+    required = materials.required_encryption_context_keys || []
+    bound_keys = Enum.uniq(Map.keys(stored) ++ required)
+
+    mismatch =
+      Enum.find(bound_keys, fn key ->
+        case Map.fetch(reproduced, key) do
+          {:ok, value} -> Map.get(cached_context, key) != value
+          :error -> false
+        end
+      end)
+
+    missing =
+      Enum.filter(required, fn key ->
+        not Map.has_key?(stored, key) and not Map.has_key?(reproduced, key)
+      end)
+
+    cond do
+      mismatch != nil -> {:error, {:encryption_context_mismatch, mismatch}}
+      missing != [] -> {:error, {:missing_required_encryption_context_keys, Enum.sort(missing)}}
+      true -> :ok
     end
   end
 

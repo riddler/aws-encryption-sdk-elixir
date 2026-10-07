@@ -650,4 +650,53 @@ defmodule AwsEncryptionSdk.TestVectors.ErrorDecryptTest do
       assert failures == [], "#{length(failures)} API mismatch tests failed"
     end
   end
+
+  # ==========================================================================
+  # Trailing Bytes Through the Public Decrypt
+  # ==========================================================================
+
+  # The five published vectors whose flipped bit leaves a complete message
+  # followed by trailing bytes. attempt_decrypt/3 above refuses trailing
+  # bytes itself before it calls decrypt, so these go straight to the public
+  # entry point. Sabotage: Decrypt accepting a message with trailing bytes
+  # turns this test red.
+  @trailing_bytes_vectors [
+    "5da80562-0738-49aa-bcad-00f0654153a4",
+    "b46133ab-250e-46d9-917a-691970340689",
+    "bacd259d-2046-407a-8a71-e971144d8414",
+    "c03d1b84-d6e2-4b2f-a26e-4c4050b4914e",
+    "e20df8c3-ded9-496b-92ea-11df6b0d43d0"
+  ]
+
+  describe "trailing bytes through the public decrypt" do
+    @tag :error_vectors
+    test "the five trailing-bytes vectors refuse through Client.decrypt_with_keyring/3",
+         %{harness: harness} do
+      skip_if_no_harness(harness)
+
+      assert length(@trailing_bytes_vectors) == 5
+
+      for test_id <- @trailing_bytes_vectors do
+        {:ok, test} = TestVectorHarness.get_test(harness, test_id)
+        {:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+
+        # The vector parses as one whole message with bytes left over.
+        {:ok, message, rest} = TestVectorHarness.parse_ciphertext(ciphertext)
+        assert byte_size(rest) > 0, "#{test_id} has no trailing bytes"
+
+        {:ok, keyring} =
+          build_keyring_from_master_keys(
+            harness,
+            test.master_keys,
+            message.header.encrypted_data_keys
+          )
+
+        assert {:error, :trailing_bytes} =
+                 Client.decrypt_with_keyring(keyring, ciphertext,
+                   commitment_policy: :require_encrypt_allow_decrypt
+                 ),
+               test_id
+      end
+    end
+  end
 end
