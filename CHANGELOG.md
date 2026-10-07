@@ -40,9 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can now read a signed message this SDK writes.
 - `Cmm.Caching` checks a decryption cache hit against the reproduced
   encryption context before serving it (#96): the hit is served only when
-  it is what a cold read of the request would produce (the stored values
-  agree, and the reproduced pairs the header does not store are exactly the
-  ones the entry bound). Otherwise the request goes the cache-miss way and
+  the request agrees with everything the entry bound (the stored values
+  agree, every key in the entry's required set is reproduced, and the
+  reproduced pairs the header does not store are exactly the ones the entry
+  bound). Otherwise the request goes the cache-miss way and
   the cold read decides, so a disagreeing reader is refused as on a cold
   read, and a failed read that populated the cache never makes a correct
   reader fail. The cache id is unchanged.
@@ -52,8 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tuple. The streaming decryptor already refused them.
 - The header bytes change for every new message with required encryption
   context keys (the required pairs leave the stored context) and for every
-  new message on a signed suite (the verification key is 64 base64
-  characters shorter).
+  new message on a signed suite (the engine generates a P-384 verification
+  key, which is now 68 base64 characters instead of 132).
 - A 1.0.x reader cannot decrypt a message this version writes with required
   encryption context keys. Upgrade every reader before any writer; a
   rollback to 1.0.x strands those messages until the reader is upgraded

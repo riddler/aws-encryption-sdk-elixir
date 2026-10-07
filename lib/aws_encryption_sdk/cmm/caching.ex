@@ -302,10 +302,13 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   # The decryption cache id hashes the STORED context only, so a key a
   # message does not store is not part of it: readers that reproduce
   # different values for such a key, or different keys, share one entry.
-  # A hit is served only when it is what a cold read with this request
-  # would produce:
+  # A hit is served only when the request agrees with everything the entry
+  # bound:
   #
   #   * every reproduced value for a stored key equals the stored value;
+  #   * every key in the entry's required set, stored or not, is reproduced
+  #     (a cold read through the default CMM or a required-context CMM
+  #     refuses or fails without it);
   #   * the reproduced pairs the header does not store are exactly the
   #     pairs the cached entry bound outside the header (its required keys
   #     absent from the stored context, with their values).
@@ -330,7 +333,11 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
         (materials.required_encryption_context_keys || []) -- Map.keys(stored)
       )
 
-    stored_agrees? and Map.drop(reproduced, Map.keys(stored)) == bound_outside_header
+    required_reproduced? =
+      Enum.all?(materials.required_encryption_context_keys || [], &Map.has_key?(reproduced, &1))
+
+    stored_agrees? and required_reproduced? and
+      Map.drop(reproduced, Map.keys(stored)) == bound_outside_header
   end
 
   defp fetch_and_cache_decryption_materials(cmm, cache_id, request) do
