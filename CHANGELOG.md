@@ -23,22 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tail of the header-authentication AAD) and still bound into the encrypted
   data keys. A message another SDK writes with required keys left out of
   the header now decrypts: the default CMM appends the reproduced pairs
-  absent from the header before the keyring unwraps, puts their keys in the
-  required set, and retries once under the stored context alone when that
-  unwrap fails, which keeps a message readable when a caller passes a key
-  the message never carried. A message written before this version is read
-  through `Cmm.RequiredEncryptionContext`, whose configured keys still join
-  the decrypt-side required set.
+  absent from the header before the keyring unwraps and puts their keys in
+  the required set. The read retries once under the stored context alone
+  when that unwrap fails, or, on a keyring that does not bind the
+  encryption context (raw RSA), when header authentication fails instead.
+  The retry keeps a message readable when a caller passes a key the message
+  never carried; when it fails too, the first failure is returned. A wrong
+  value for a key the writer bound is still refused on every keyring. A
+  message written before this version is read through
+  `Cmm.RequiredEncryptionContext`, whose configured keys still join the
+  decrypt-side required set.
 - Signed suites write the signature verification key
   (`aws-crypto-public-key`) as the SEC 1 compressed point the specification
   requires, instead of the uncompressed point; both forms still read, so
   every signed message an earlier version wrote still verifies. Another SDK
   can now read a signed message this SDK writes.
 - `Cmm.Caching` checks a decryption cache hit against the reproduced
-  encryption context before serving it: a reproduced value that differs
-  from one the cached entry bound, or a required key the entry bound
-  outside the header that the reader does not reproduce, is refused as a
-  cold read would refuse it (#96). The cache id is unchanged.
+  encryption context before serving it (#96): the hit is served only when
+  it is what a cold read of the request would produce (the stored values
+  agree, and the reproduced pairs the header does not store are exactly the
+  ones the entry bound). Otherwise the request goes the cache-miss way and
+  the cold read decides, so a disagreeing reader is refused as on a cold
+  read, and a failed read that populated the cache never makes a correct
+  reader fail. The cache id is unchanged.
 - Decrypt returns `{:error, :trailing_bytes}` for a message followed by
   trailing bytes, through `Client.decrypt/3`, `decrypt_with_keyring/3` and
   decrypt with materials, instead of a three-element `{:ok, message, rest}`

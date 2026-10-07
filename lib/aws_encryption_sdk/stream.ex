@@ -175,16 +175,10 @@ defmodule AwsEncryptionSdk.Stream do
     fail_on_signed = Keyword.get(opts, :fail_on_signed, false)
     reproduced_context = Keyword.get(opts, :encryption_context, %{})
 
+    # The same materials (and the same stored-context retry) as
+    # Client.decrypt/3.
     get_materials = fn header ->
-      request = %{
-        algorithm_suite: header.algorithm_suite,
-        commitment_policy: client.commitment_policy,
-        encrypted_data_keys: header.encrypted_data_keys,
-        encryption_context: header.encryption_context,
-        reproduced_encryption_context: reproduced_context
-      }
-
-      call_cmm_get_decryption_materials(client.cmm, request)
+      Client.decryption_materials_for_header(client, header, reproduced_context)
     end
 
     Decryptor.init(get_materials: get_materials, fail_on_signed: fail_on_signed)
@@ -227,23 +221,6 @@ defmodule AwsEncryptionSdk.Stream do
   end
 
   defp call_cmm_get_encryption_materials(cmm, _request) do
-    {:error, {:unsupported_cmm_type, cmm.__struct__}}
-  end
-
-  # Dispatch get_decryption_materials to the appropriate CMM module
-  defp call_cmm_get_decryption_materials(%Default{} = cmm, request) do
-    Default.get_decryption_materials(cmm, request)
-  end
-
-  defp call_cmm_get_decryption_materials(%RequiredEncryptionContext{} = cmm, request) do
-    RequiredEncryptionContext.get_decryption_materials(cmm, request)
-  end
-
-  defp call_cmm_get_decryption_materials(%Caching{} = cmm, request) do
-    Caching.get_decryption_materials(cmm, request)
-  end
-
-  defp call_cmm_get_decryption_materials(cmm, _request) do
     {:error, {:unsupported_cmm_type, cmm.__struct__}}
   end
 end

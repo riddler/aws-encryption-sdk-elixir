@@ -242,16 +242,21 @@ defmodule AwsEncryptionSdk.Cmm.Default do
 
   # The specification's Decrypt Materials (framework/cmm-interface.md): the
   # reproduced pairs absent from the stored context are appended to the
-  # decryption materials BEFORE the keyring unwraps, so the unwrap
-  # authenticates them, and their keys form the decrypt-side required set
-  # (the tail of the header-authentication AAD). A writer that follows the
-  # specification bound the data key to them and left them out of the header.
+  # decryption materials BEFORE the keyring unwraps, so a keyring that binds
+  # the context authenticates them, and their keys form the decrypt-side
+  # required set (the tail of the header-authentication AAD). A writer that
+  # follows the specification bound the data key to them and left them out
+  # of the header.
   #
   # When that unwrap fails, one retry unwraps under the stored context alone
   # and merges the reproduced pairs after it, with nothing added to the
-  # required set: that is how 1.0.x read, and it keeps a message readable
-  # when the caller passes a key the writer never bound. A wrong value for
-  # a key the writer did bind fails both unwraps.
+  # required set: the read versions before 1.1.0 made. It keeps a message
+  # readable when the caller passes a key its writer never bound, on a
+  # keyring that binds the context. When the retry fails too, the FIRST
+  # unwrap's reason is returned. A keyring that does not bind the context
+  # (raw RSA) unwraps under any claim, so there the extra key surfaces at
+  # header authentication instead, and AwsEncryptionSdk.Client makes the
+  # same single retry at that point.
   defp unwrap_with_reproduced(keyring, suite, context, reproduced_context, verification_key, edks) do
     appended = Map.drop(reproduced_context || %{}, Map.keys(context))
 
@@ -273,20 +278,24 @@ defmodule AwsEncryptionSdk.Cmm.Default do
 
       case call_unwrap_key(keyring, appended_materials, edks) do
         {:ok, materials} ->
-          {:ok, materials}
+          {:ok, merge_reproduced_into_materials(materials, reproduced_context)}
 
-        {:error, _reason} ->
-          unwrap_under_stored_context(
-            keyring,
+        {:error, _reason} = first_error ->
+          keyring
+          |> unwrap_under_stored_context(
             suite,
             context,
             reproduced_context,
             verification_key,
             edks
           )
+          |> or_first_error(first_error)
       end
     end
   end
+
+  defp or_first_error({:ok, _materials} = ok, _first_error), do: ok
+  defp or_first_error({:error, _retry_reason}, first_error), do: first_error
 
   defp unwrap_under_stored_context(
          keyring,
@@ -296,7 +305,8 @@ defmodule AwsEncryptionSdk.Cmm.Default do
          verification_key,
          edks
        ) do
-    initial_materials = create_initial_decryption_materials(suite, context, verification_key)
+    initial_materials =
+      DecryptionMaterials.new_for_decrypt(suite, context, verification_key: verification_key)
 
     with {:ok, materials} <- call_unwrap_key(keyring, initial_materials, edks) do
       {:ok, merge_reproduced_into_materials(materials, reproduced_context)}
@@ -318,10 +328,6 @@ defmodule AwsEncryptionSdk.Cmm.Default do
     else
       {:ok, nil}
     end
-  end
-
-  defp create_initial_decryption_materials(suite, context, verification_key) do
-    DecryptionMaterials.new_for_decrypt(suite, context, verification_key: verification_key)
   end
 
   defp merge_reproduced_into_materials(materials, nil), do: materials

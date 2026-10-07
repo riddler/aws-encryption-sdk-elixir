@@ -20,9 +20,10 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
   alias AwsEncryptionSdk.Cache.LocalCache
   alias AwsEncryptionSdk.Client
   alias AwsEncryptionSdk.Cmm.{Caching, Default, RequiredEncryptionContext}
+  alias AwsEncryptionSdk.Crypto.{HeaderAuth, HKDF}
   alias AwsEncryptionSdk.Decrypt
   alias AwsEncryptionSdk.Format.Header
-  alias AwsEncryptionSdk.Keyring.RawAes
+  alias AwsEncryptionSdk.Keyring.{Multi, RawAes, RawRsa}
   alias AwsEncryptionSdk.Materials.DecryptionMaterials
   alias AwsEncryptionSdk.Stream
 
@@ -58,6 +59,52 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
     [ciphertext]
     |> Stream.decrypt(client, encryption_context: context)
     |> Enum.map_join(fn {plaintext, _status} -> plaintext end)
+  end
+
+  defp rsa_keyring do
+    private_key = :public_key.generate_key({:rsa, 2048, 65_537})
+
+    {:RSAPrivateKey, _version, modulus, public_exp, _d, _p, _q, _e1, _e2, _c, _other} =
+      private_key
+
+    {:ok, keyring} =
+      RawRsa.new("fixture-rsa-ns", "fixture-rsa-key", {:oaep, :sha256},
+        public_key: {:RSAPublicKey, modulus, public_exp},
+        private_key: private_key
+      )
+
+    keyring
+  end
+
+  # Rewrites a 0x0478 message with required keys into the form versions
+  # before 1.1.0 wrote: the same message id, data key, encrypted data keys
+  # and body, with the required pairs stored in the header AND authenticated
+  # again as the tail of the header-authentication AAD.
+  defp old_form(ciphertext, keyring) do
+    {:ok, header, body} = Header.deserialize(ciphertext)
+    suite = header.algorithm_suite
+    materials = DecryptionMaterials.new_for_decrypt(suite, @context)
+    {:ok, unwrapped} = Default.call_unwrap_key(keyring, materials, header.encrypted_data_keys)
+
+    {:ok, derived_key} =
+      HKDF.derive(
+        suite.kdf_hash,
+        unwrapped.plaintext_data_key,
+        header.message_id,
+        <<suite.id::16-big>> <> "DERIVEKEY",
+        div(suite.data_key_length, 8)
+      )
+
+    {:ok, tagged} =
+      HeaderAuth.compute_header_auth_tag(
+        %{header | encryption_context: @context},
+        derived_key,
+        @context,
+        @required
+      )
+
+    {:ok, header_bytes} = Header.serialize(tagged)
+    header_bytes <> body
   end
 
   defp suites do
@@ -197,7 +244,7 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
     end
 
     # Sabotage: removing the stored-context retry in
-    # Cmm.Default.get_decryption_materials/2 turns this test red.
+    # Client.decryption_materials_for_header/3 turns this test red.
     test "still decrypts when the caller passes a key the message never carried",
          %{keyring: keyring} do
       for {name, _suite} <- suites() do
@@ -290,7 +337,8 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
       partition_id = :crypto.strong_rand_bytes(16)
 
       # A second Caching CMM on the same cache and partition whose keyring
-      # holds another key: it can only succeed by a cache hit.
+      # holds another key: it can only succeed by a cache hit, and a
+      # request that misses the cache fails its cold unwrap.
       {:ok, other_keyring} =
         RawAes.new(
           "fixture-ns",
@@ -309,24 +357,24 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
       {:ok, warm: cached.(keyring), hit_only: cached.(other_keyring), ciphertext: ciphertext}
     end
 
-    # Sabotage: serving a decryption cache hit without check_bound_context/2
-    # turns this test red (the wrong value gets plaintext).
-    test "refuses a second read claiming a different value for a key the header does not store",
+    # Sabotage: serving every decryption cache hit (bound_context_agrees?/2
+    # always true) turns this test red: the wrong value gets plaintext.
+    test "does not serve a second read claiming a different value for a key the header does not store",
          ctx do
       assert {:ok, %{plaintext: @fixture_plaintext}} =
                Client.decrypt(ctx.warm, ctx.ciphertext, encryption_context: @context)
 
       wrong = Map.put(@context, "required-a", "other-value")
 
-      assert {:error, {:encryption_context_mismatch, "required-a"}} =
+      assert {:error, _cold_read_failed} =
                Client.decrypt(ctx.hit_only, ctx.ciphertext, encryption_context: wrong)
     end
 
-    test "refuses a second read that omits a bound key the header does not store", ctx do
+    test "does not serve a second read that omits a bound key the header does not store", ctx do
       assert {:ok, _first_read} =
                Client.decrypt(ctx.warm, ctx.ciphertext, encryption_context: @context)
 
-      assert {:error, {:missing_required_encryption_context_keys, ["required-a"]}} =
+      assert {:error, _cold_read_failed} =
                Client.decrypt(ctx.hit_only, ctx.ciphertext,
                  encryption_context: Map.delete(@context, "required-a")
                )
@@ -349,11 +397,139 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
       assert {:ok, %{plaintext: @fixture_plaintext}} =
                Client.decrypt(ctx.hit_only, ctx.ciphertext, encryption_context: @context)
 
-      # A reproduced key the entry did not bind is not compared, as on a cold read.
-      assert {:ok, %{plaintext: @fixture_plaintext}} =
+      # Reproduced pairs that differ from the ones the entry bound are not
+      # what a cold read of this request would produce: no hit.
+      assert {:error, _cold_read_failed} =
                Client.decrypt(ctx.hit_only, ctx.ciphertext,
                  encryption_context: Map.put(@context, "never-carried", "advisory")
                )
+    end
+  end
+
+  describe "a keyring that does not bind the encryption context (raw RSA)" do
+    setup do
+      {:ok, rsa: rsa_keyring()}
+    end
+
+    # Sabotage: removing the stored-context retry in
+    # Client.decryption_materials_for_header/3 turns this test red
+    # ({:error, :header_authentication_failed}).
+    test "a message with no required keys reads with a key it never carried, buffered and streaming",
+         %{rsa: rsa} do
+      client = default_client(rsa)
+
+      ciphertext =
+        encrypt(client, AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key(), %{"a" => "1"})
+
+      extra = %{"a" => "1", "extra" => "advisory"}
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(client, ciphertext, encryption_context: extra)
+
+      assert stream_decrypt(ciphertext, client, extra) == @fixture_plaintext
+    end
+
+    # Sabotage: the same retry removal turns this test red.
+    test "a message in the form before 1.1.0 reads with a key it never carried, buffered and streaming",
+         %{rsa: rsa} do
+      ciphertext =
+        old_form(
+          encrypt(required_client(rsa), AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()),
+          rsa
+        )
+
+      assert Map.take(stored_context(ciphertext), Map.keys(@context)) == @context
+
+      extra = Map.put(@context, "extra", "advisory")
+
+      for reproduced <- [@context, extra] do
+        assert {:ok, %{plaintext: @fixture_plaintext}} =
+                 Client.decrypt(required_client(rsa), ciphertext, encryption_context: reproduced)
+
+        assert stream_decrypt(ciphertext, required_client(rsa), reproduced) == @fixture_plaintext
+      end
+    end
+
+    test "a message in the form before 1.1.0 refuses a different value for a stored key",
+         %{rsa: rsa} do
+      ciphertext =
+        old_form(
+          encrypt(required_client(rsa), AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()),
+          rsa
+        )
+
+      wrong = @context |> Map.put("required-a", "other-value") |> Map.put("extra", "advisory")
+
+      assert {:error, {:encryption_context_mismatch, "required-a"}} =
+               Client.decrypt(required_client(rsa), ciphertext, encryption_context: wrong)
+    end
+  end
+
+  describe "a wrong value for a key the writer bound but did not store" do
+    # The retry never turns a wrong value into plaintext: on a keyring that
+    # does not bind the context, header authentication is what refuses it.
+    # Sabotage: HeaderAuth.verify_header_auth_tag/4 returning :ok without
+    # checking the tag turns this test red on the raw RSA rows.
+    test "fails on raw AES, raw RSA and a multi-keyring with an RSA child, buffered and streaming" do
+      {:ok, aes} = RawAes.new("fixture-ns", "fixture-wrapping-key", @fixture_key, :aes_256_gcm)
+      rsa = rsa_keyring()
+      {:ok, writer_multi} = Multi.new(generator: aes, children: [rsa])
+      {:ok, reader_multi} = Multi.new(children: [rsa])
+
+      wrong = Map.put(@context, "required-a", "other-value")
+      wrong_with_extra = Map.put(wrong, "extra", "advisory")
+
+      for {writer, reader} <- [{aes, aes}, {rsa, rsa}, {writer_multi, reader_multi}],
+          {_name, suite} <- suites() do
+        ciphertext = encrypt(required_client(writer), suite)
+
+        for client <- [required_client(reader), default_client(reader)],
+            reproduced <- [wrong, wrong_with_extra, Map.delete(@context, "required-a")] do
+          assert {:error, _reason} =
+                   Client.decrypt(client, ciphertext, encryption_context: reproduced)
+
+          assert_raise RuntimeError, fn -> stream_decrypt(ciphertext, client, reproduced) end
+        end
+
+        assert {:ok, %{plaintext: @fixture_plaintext}} =
+                 Client.decrypt(required_client(reader), ciphertext, encryption_context: @context)
+      end
+    end
+  end
+
+  describe "a failed read that populated the cache (raw RSA)" do
+    setup do
+      rsa = rsa_keyring()
+      {:ok, cache} = LocalCache.start_link([])
+      client = Client.new(Caching.new(Default.new(rsa), cache, max_age: 300))
+
+      ciphertext =
+        encrypt(required_client(rsa), AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key())
+
+      {:ok, client: client, ciphertext: ciphertext}
+    end
+
+    # Sabotage: refusing a hit whose bound context disagrees, instead of
+    # falling through to the cache-miss path, turns this test red.
+    test "a wrong-value read first does not make the correct reader fail", ctx do
+      wrong = Map.put(@context, "required-a", "other-value")
+
+      assert {:error, _reason} =
+               Client.decrypt(ctx.client, ctx.ciphertext, encryption_context: wrong)
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.client, ctx.ciphertext, encryption_context: @context)
+    end
+
+    # Sabotage: the same refusal instead of the fall-through turns this test red.
+    test "an extra-key read first does not make the correct reader fail", ctx do
+      extra = Map.put(@context, "extra", "advisory")
+
+      assert {:error, _reason} =
+               Client.decrypt(ctx.client, ctx.ciphertext, encryption_context: extra)
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.client, ctx.ciphertext, encryption_context: @context)
     end
   end
 
