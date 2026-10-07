@@ -497,6 +497,43 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
     end
   end
 
+  describe "a warm cache over the required-context CMM, message written before 1.1.0" do
+    # Sabotage: bound_context_agrees?/2 dropping the condition that every
+    # key in the entry's required set is reproduced turns this test red: a
+    # reader that omits a stored required key gets the cached materials.
+    test "a reader that omits a stored required key is refused cold and warm", %{keyring: keyring} do
+      {:ok, cache} = LocalCache.start_link([])
+
+      client =
+        Client.new(
+          Caching.new(RequiredEncryptionContext.new_with_keyring(@required, keyring), cache,
+            max_age: 300
+          )
+        )
+
+      ciphertext = fixture(@pre_fix_dir, "required-context-0478.bin")
+      omitting = Map.delete(@context, "required-a")
+
+      assert {:error, {:missing_required_encryption_context_keys, ["required-a"]}} =
+               Client.decrypt(client, ciphertext, encryption_context: omitting)
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(client, ciphertext, encryption_context: @context)
+
+      assert {:error, {:missing_required_encryption_context_keys, ["required-a"]}} =
+               Client.decrypt(client, ciphertext, encryption_context: omitting)
+
+      assert {:error, {:missing_required_encryption_context_keys, _keys}} =
+               Client.decrypt(client, ciphertext, encryption_context: %{})
+
+      # The correct reader is still served after the refusals.
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(client, ciphertext, encryption_context: @context)
+
+      assert stream_decrypt(ciphertext, client, @context) == @fixture_plaintext
+    end
+  end
+
   describe "a failed read that populated the cache (raw RSA)" do
     setup do
       rsa = rsa_keyring()
