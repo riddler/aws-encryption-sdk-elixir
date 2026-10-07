@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CI and the release workflow fetch the test vectors
+  (awslabs/aws-encryption-sdk-test-vectors) at one pinned commit,
+  `b6a6c91e62cc67f891b5dc3d11b0f047d10baf76`, instead of a shallow clone
+  of its default branch, and CI's test-vectors cache is keyed on that
+  commit with no fallback key. Before, the cache key hashed `ci.yml`, so
+  every workflow edit missed it, and its fallback could restore a clone
+  the setup step then kept.
+
 ## [1.0.1] - 2026-10-06
 
 ### Added

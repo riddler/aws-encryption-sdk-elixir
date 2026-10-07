@@ -119,11 +119,17 @@ jobs:
 
       # The same test vectors the CI quality cell clones, set up the same way.
       - name: Setup test vectors
+        # The commit ci.yml pins (TEST_VECTORS_SHA there); move both together.
+        env:
+          TEST_VECTORS_SHA: b6a6c91e62cc67f891b5dc3d11b0f047d10baf76
         run: |
-          if [ ! -d "test/fixtures/test_vectors/.git" ]; then
-            git clone --depth 1 https://github.com/awslabs/aws-encryption-sdk-test-vectors.git \
-              test/fixtures/test_vectors
-            cd test/fixtures/test_vectors/vectors/awses-decrypt
+          dir=test/fixtures/test_vectors
+          if [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)" != "$TEST_VECTORS_SHA" ]; then
+            rm -rf "$dir"
+            git init -q "$dir"
+            git -C "$dir" fetch -q --depth 1 https://github.com/awslabs/aws-encryption-sdk-test-vectors.git "$TEST_VECTORS_SHA"
+            git -C "$dir" checkout -q FETCH_HEAD
+            cd "$dir/vectors/awses-decrypt"
             unzip -q python-2.3.0.zip
           fi
 
