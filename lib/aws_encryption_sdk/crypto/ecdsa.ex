@@ -38,19 +38,42 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   @doc """
   Encodes a public key to base64 for storage in encryption context.
 
-  The public key is stored as-is (uncompressed point format) and base64 encoded.
+  An uncompressed point (`0x04` prefix) is written as the point compressed
+  according to SEC 1 v2.0 section 2.3.3 (a `0x02` or `0x03` prefix by the
+  parity of `y`, followed by `x`), as the specification's
+  framework/transitive-requirements.md requires for a serialized
+  verification key, then base64 encoded. Any other binary (a point already
+  compressed) is base64 encoded as it is. Versions before 1.1.0 wrote the
+  uncompressed point; `decode_public_key/1` and `normalize_public_key/2`
+  still read both forms.
 
   ## Examples
 
       iex> {_private_key, public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
       iex> encoded = AwsEncryptionSdk.Crypto.ECDSA.encode_public_key(public_key)
-      iex> String.printable?(encoded)
-      true
+      iex> byte_size(Base.decode64!(encoded))
+      49
 
   """
   @spec encode_public_key(binary()) :: String.t()
+  def encode_public_key(<<0x04, coordinates::binary>> = public_key)
+      when rem(byte_size(coordinates), 2) == 0 do
+    half = div(byte_size(coordinates), 2)
+    <<x::binary-size(half), y::binary-size(half)>> = coordinates
+
+    if half in [32, 48] do
+      Base.encode64(<<compressed_prefix(y), x::binary>>)
+    else
+      Base.encode64(public_key)
+    end
+  end
+
   def encode_public_key(public_key) when is_binary(public_key) do
     Base.encode64(public_key)
+  end
+
+  defp compressed_prefix(y) do
+    if rem(:binary.last(y), 2) == 0, do: 0x02, else: 0x03
   end
 
   @doc """
@@ -61,7 +84,7 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
       iex> {_private_key, public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp384r1)
       iex> encoded = AwsEncryptionSdk.Crypto.ECDSA.encode_public_key(public_key)
       iex> {:ok, decoded} = AwsEncryptionSdk.Crypto.ECDSA.decode_public_key(encoded)
-      iex> decoded == public_key
+      iex> AwsEncryptionSdk.Crypto.ECDSA.normalize_public_key(decoded, :secp384r1) == public_key
       true
 
   """

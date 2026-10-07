@@ -226,14 +226,80 @@ defmodule AwsEncryptionSdk.Cmm.Default do
          :ok <- CmmBehaviour.validate_reproduced_context(context, reproduced_context),
          :ok <- CmmBehaviour.validate_signing_context_consistency(suite, context),
          {:ok, verification_key} <- extract_verification_key(suite, context),
-         # Use ORIGINAL context for keyring (for AAD validation)
-         initial_materials =
-           create_initial_decryption_materials(suite, context, verification_key),
-         {:ok, materials} <- call_unwrap_key(keyring, initial_materials, edks),
-         # Merge reproduced context AFTER decryption
-         final_materials = merge_reproduced_into_materials(materials, reproduced_context),
+         {:ok, final_materials} <-
+           unwrap_with_reproduced(
+             keyring,
+             suite,
+             context,
+             reproduced_context,
+             verification_key,
+             edks
+           ),
          :ok <- CmmBehaviour.validate_decryption_materials(final_materials) do
       {:ok, final_materials}
+    end
+  end
+
+  # The specification's Decrypt Materials (framework/cmm-interface.md): the
+  # reproduced pairs absent from the stored context are appended to the
+  # decryption materials BEFORE the keyring unwraps, so the unwrap
+  # authenticates them, and their keys form the decrypt-side required set
+  # (the tail of the header-authentication AAD). A writer that follows the
+  # specification bound the data key to them and left them out of the header.
+  #
+  # When that unwrap fails, one retry unwraps under the stored context alone
+  # and merges the reproduced pairs after it, with nothing added to the
+  # required set: that is how 1.0.x read, and it keeps a message readable
+  # when the caller passes a key the writer never bound. A wrong value for
+  # a key the writer did bind fails both unwraps.
+  defp unwrap_with_reproduced(keyring, suite, context, reproduced_context, verification_key, edks) do
+    appended = Map.drop(reproduced_context || %{}, Map.keys(context))
+
+    if map_size(appended) == 0 do
+      unwrap_under_stored_context(
+        keyring,
+        suite,
+        context,
+        reproduced_context,
+        verification_key,
+        edks
+      )
+    else
+      appended_materials =
+        DecryptionMaterials.new_for_decrypt(suite, Map.merge(context, appended),
+          verification_key: verification_key,
+          required_encryption_context_keys: appended |> Map.keys() |> Enum.sort()
+        )
+
+      case call_unwrap_key(keyring, appended_materials, edks) do
+        {:ok, materials} ->
+          {:ok, materials}
+
+        {:error, _reason} ->
+          unwrap_under_stored_context(
+            keyring,
+            suite,
+            context,
+            reproduced_context,
+            verification_key,
+            edks
+          )
+      end
+    end
+  end
+
+  defp unwrap_under_stored_context(
+         keyring,
+         suite,
+         context,
+         reproduced_context,
+         verification_key,
+         edks
+       ) do
+    initial_materials = create_initial_decryption_materials(suite, context, verification_key)
+
+    with {:ok, materials} <- call_unwrap_key(keyring, initial_materials, edks) do
+      {:ok, merge_reproduced_into_materials(materials, reproduced_context)}
     end
   end
 

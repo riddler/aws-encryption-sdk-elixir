@@ -143,8 +143,16 @@ defmodule AwsEncryptionSdk.Cmm.RequiredEncryptionContext do
              cmm.required_encryption_context_keys,
              materials
            ) do
-      # Update materials to include required encryption context keys for header auth
-      # Merge with any existing required keys from underlying CMM
+      # The decrypt-side required set is the underlying CMM's (the reproduced
+      # keys absent from the stored context) UNION this CMM's configured keys.
+      # The union is deliberate and load-bearing: messages written before
+      # 1.1.0 stored the required keys in the header AND authenticated them
+      # again as the tail of the header-authentication AAD. The underlying
+      # CMM leaves a stored key out of its set, so without the configured
+      # keys here the tail would be empty and no such message would pass
+      # header authentication. For a message in the current form the
+      # configured keys are absent from the header and already in the
+      # underlying set, so the union changes nothing.
       all_required_keys =
         (materials.required_encryption_context_keys ++ cmm.required_encryption_context_keys)
         |> Enum.uniq()

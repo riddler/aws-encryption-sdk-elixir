@@ -49,12 +49,13 @@ defmodule AwsEncryptionSdk.Decrypt do
   - `:commitment_mismatch` - Key commitment verification failed
   - `:body_authentication_failed` - Frame auth tag verification failed
   - `:signature_verification_failed` - Footer signature verification failed
+  - `:trailing_bytes` - Bytes follow the end of the message
   """
   @spec decrypt(binary(), DecryptionMaterials.t()) ::
           {:ok, decrypt_result()} | {:error, term()}
   def decrypt(ciphertext, %DecryptionMaterials{} = materials) do
     with :ok <- check_base64_encoding(ciphertext),
-         {:ok, message, <<>>} <- Message.deserialize(ciphertext),
+         {:ok, message} <- deserialize_whole_message(ciphertext),
          {:ok, derived_key} <- derive_data_key(materials, message.header),
          :ok <- verify_commitment(materials, message.header, derived_key),
          :ok <-
@@ -72,6 +73,17 @@ defmodule AwsEncryptionSdk.Decrypt do
          header: message.header,
          encryption_context: message.header.encryption_context
        }}
+    end
+  end
+
+  # The whole input must be exactly one message: bytes after its end are an
+  # error, never ignored (the streaming decryptor refuses them in
+  # finalize/1 the same way).
+  defp deserialize_whole_message(ciphertext) do
+    case Message.deserialize(ciphertext) do
+      {:ok, message, <<>>} -> {:ok, message}
+      {:ok, _message, _rest} -> {:error, :trailing_bytes}
+      {:error, _reason} = error -> error
     end
   end
 

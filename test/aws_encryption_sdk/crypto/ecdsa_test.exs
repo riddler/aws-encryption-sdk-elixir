@@ -33,7 +33,30 @@ defmodule AwsEncryptionSdk.Crypto.ECDSATest do
       assert String.printable?(encoded)
 
       {:ok, decoded} = ECDSA.decode_public_key(encoded)
-      assert decoded == public_key
+      assert ECDSA.normalize_public_key(decoded, :secp384r1) == public_key
+    end
+
+    # Sabotage: encode_public_key/1 returning Base.encode64(public_key) for
+    # an uncompressed point (the form 1.0.x wrote) turns this test red.
+    test "writes the SEC 1 compressed point: the parity prefix, then x" do
+      for _round <- 1..20 do
+        {_private_key, <<0x04, x::binary-size(48), y::binary-size(48)>> = public_key} =
+          ECDSA.generate_key_pair(:secp384r1)
+
+        {:ok, decoded} = public_key |> ECDSA.encode_public_key() |> ECDSA.decode_public_key()
+
+        expected_prefix = if rem(:binary.last(y), 2) == 0, do: 0x02, else: 0x03
+        assert decoded == <<expected_prefix, x::binary>>
+        assert byte_size(ECDSA.encode_public_key(public_key)) == 68
+      end
+    end
+
+    test "encodes an already compressed point as it is" do
+      {_private_key, <<0x04, x::binary-size(48), _y::binary-size(48)>>} =
+        ECDSA.generate_key_pair(:secp384r1)
+
+      compressed = <<0x02, x::binary>>
+      assert ECDSA.encode_public_key(compressed) == Base.encode64(compressed)
     end
 
     test "decode_public_key returns error for invalid base64" do
