@@ -348,7 +348,8 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
     if AlgorithmSuite.signed?(header.algorithm_suite) do
       {:ok, header_binary} = Header.serialize(header)
 
-      SignatureAccumulator.init()
+      header.algorithm_suite
+      |> SignatureAccumulator.init()
       |> SignatureAccumulator.update(header_binary)
     else
       nil

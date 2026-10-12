@@ -28,7 +28,7 @@ An Elixir implementation of the [AWS Encryption SDK](https://docs.aws.amazon.com
 - Multi-keyring composition
 - Cryptographic Materials Manager (CMM) with Default implementation
 - Client module with commitment policy enforcement
-- ECDSA signing for signed algorithm suites (P-384)
+- ECDSA signing for signed algorithm suites (P-256 and P-384)
 - Support for all 17 algorithm suites
 - AWS KMS Keyring
 - AWS KMS Discovery Keyring

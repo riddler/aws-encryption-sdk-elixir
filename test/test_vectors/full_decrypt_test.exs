@@ -16,6 +16,7 @@ defmodule AwsEncryptionSdk.TestVectors.FullDecryptTest do
   use ExUnit.Case, async: true
 
   alias AwsEncryptionSdk.Client
+  alias AwsEncryptionSdk.Cmm.Default
   alias AwsEncryptionSdk.Keyring.{Multi, RawAes, RawRsa}
   alias AwsEncryptionSdk.TestSupport.{TestVectorHarness, TestVectorSetup}
 
@@ -376,6 +377,99 @@ defmodule AwsEncryptionSdk.TestVectors.FullDecryptTest do
       end
 
       assert failed == [], "#{length(failed)} multi-keyring tests failed"
+    end
+  end
+
+  # ==========================================================================
+  # P-256 Signed Vectors (suite 0x0214), One-Shot and Streaming
+  # ==========================================================================
+
+  # Runs one vector through the streaming decrypt.
+  defp run_streaming_decrypt_test(harness, test_id) do
+    with {:ok, test} <- TestVectorHarness.get_test(harness, test_id),
+         {:ok, ciphertext} <- TestVectorHarness.load_ciphertext(harness, test_id),
+         {:ok, message, _rest} <- TestVectorHarness.parse_ciphertext(ciphertext),
+         {:ok, keyring} <-
+           build_keyring_from_master_keys(
+             harness,
+             test.master_keys,
+             message.header.encrypted_data_keys
+           ),
+         {:ok, expected} <- TestVectorHarness.load_expected_plaintext(harness, test_id) do
+      client = Client.new(Default.new(keyring), commitment_policy: :require_encrypt_allow_decrypt)
+
+      actual =
+        [ciphertext]
+        |> AwsEncryptionSdk.Stream.decrypt(client)
+        |> Enum.map_join(fn {plaintext, _status} -> plaintext end)
+
+      if actual == expected, do: :ok, else: {:error, :plaintext_mismatch}
+    end
+  rescue
+    # Stream.decrypt raises on a failed decrypt
+    error -> {:error, {:raised, Exception.message(error)}}
+  end
+
+  defp p256_raw_aes_vectors(harness) do
+    harness
+    |> TestVectorHarness.success_tests()
+    |> TestVectorHarness.raw_key_tests()
+    |> TestVectorHarness.by_encryption_algorithm("aes")
+    |> TestVectorHarness.single_key_tests()
+    |> Enum.flat_map(fn {test_id, _test} ->
+      {:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+      {:ok, message, _rest} = TestVectorHarness.parse_ciphertext(ciphertext)
+
+      if message.header.algorithm_suite.id == 0x0214,
+        do: [{test_id, message.header.content_type}],
+        else: []
+    end)
+  end
+
+  describe "P-256 signed vectors (suite 0x0214)" do
+    @tag :full_test_vectors
+    @tag :raw_aes
+    # A vector another SDK wrote on 0x0214 with a P-256 verification key:
+    # raw AES-128 key, framed.
+    # Sabotage: in SignatureAccumulator.init/1, ignore the suite and use
+    # P-384 -> the streaming read raises on the P-256 key.
+    test "a framed raw AES vector decrypts one-shot and streaming", %{harness: harness} do
+      skip_if_no_harness(harness)
+      test_id = "8743a46a-c784-4f53-91a9-6ca2b5ae9781"
+
+      assert :ok == run_full_decrypt_test(harness, test_id)
+      assert :ok == run_streaming_decrypt_test(harness, test_id)
+    end
+
+    @tag :full_test_vectors
+    @tag :raw_aes
+    @tag timeout: 300_000
+    # The streaming decrypt reads framed messages only (on every suite), so
+    # the non-framed 0x0214 vectors are read one-shot only: an excluded set
+    # of exactly 12, counted below.
+    test "every single raw AES 0x0214 vector decrypts one-shot; every framed one streaming",
+         %{harness: harness} do
+      skip_if_no_harness(harness)
+      vectors = p256_raw_aes_vectors(harness)
+      framed = for {test_id, :framed} <- vectors, do: test_id
+      non_framed = for {test_id, :non_framed} <- vectors, do: test_id
+
+      assert length(vectors) == 60
+      assert length(framed) == 48
+      assert length(non_framed) == 12
+
+      one_shot_failures =
+        for {test_id, _content_type} <- vectors,
+            (result = run_full_decrypt_test(harness, test_id)) != :ok,
+            do: {test_id, result}
+
+      streaming_failures =
+        for test_id <- framed,
+            (result = run_streaming_decrypt_test(harness, test_id)) != :ok,
+            do: {test_id, result}
+
+      assert one_shot_failures == []
+      assert streaming_failures == []
     end
   end
 

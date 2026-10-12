@@ -115,7 +115,7 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
 
     if AlgorithmSuite.allows_encryption?(suite) do
       # Initialize signature accumulator for signed suites
-      sig_acc = if AlgorithmSuite.signed?(suite), do: SignatureAccumulator.init(), else: nil
+      sig_acc = if AlgorithmSuite.signed?(suite), do: SignatureAccumulator.init(suite), else: nil
 
       {:ok,
        %__MODULE__{

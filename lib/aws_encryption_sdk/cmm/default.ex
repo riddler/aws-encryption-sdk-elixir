@@ -194,7 +194,7 @@ defmodule AwsEncryptionSdk.Cmm.Default do
 
   defp maybe_add_signing_context(suite, context) do
     if AlgorithmSuite.signed?(suite) do
-      {private_key, public_key} = ECDSA.generate_key_pair(:secp384r1)
+      {private_key, public_key} = suite |> ECDSA.curve_for_suite() |> ECDSA.generate_key_pair()
       encoded_public_key = ECDSA.encode_public_key(public_key)
       reserved_key = CmmBehaviour.reserved_encryption_context_key()
       updated_context = Map.put(context, reserved_key, encoded_public_key)
