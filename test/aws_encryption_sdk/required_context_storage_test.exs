@@ -406,6 +406,131 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
     end
   end
 
+  describe "a cache partition shared by a default and a required-context Caching CMM" do
+    setup %{keyring: keyring} do
+      {:ok, cache} = LocalCache.start_link([])
+      partition_id = :crypto.strong_rand_bytes(16)
+
+      # A keyring holding another key: a Caching CMM over it can only
+      # succeed by a cache hit, and a request that misses the cache fails
+      # its cold unwrap (or is refused before it).
+      {:ok, other_keyring} =
+        RawAes.new(
+          "fixture-ns",
+          "fixture-wrapping-key",
+          :crypto.strong_rand_bytes(32),
+          :aes_256_gcm
+        )
+
+      on_partition = fn underlying ->
+        Client.new(Caching.new(underlying, cache, max_age: 300, partition_id: partition_id))
+      end
+
+      {:ok, inner_cache} = LocalCache.start_link([])
+
+      # A Caching CMM over a Caching CMM over the required-context CMM: the
+      # outer one reads the required keys through the nested one.
+      nested =
+        Client.new(
+          Caching.new(
+            Caching.new(
+              RequiredEncryptionContext.new_with_keyring(@required, keyring),
+              inner_cache,
+              max_age: 300
+            ),
+            cache,
+            max_age: 300,
+            partition_id: partition_id
+          )
+        )
+
+      {:ok,
+       default_side: on_partition.(Default.new(keyring)),
+       required_side:
+         on_partition.(RequiredEncryptionContext.new_with_keyring(@required, keyring)),
+       required_hit_only:
+         on_partition.(RequiredEncryptionContext.new_with_keyring(@required, other_keyring)),
+       nested_required_side: nested}
+    end
+
+    # Sabotage: dropping the reading CMM's configured keys from the hit
+    # check (Caching's bound_context_agrees?/3 ignoring its reader_keys
+    # argument) turns this test red: the omitting read is served the
+    # default side's entry and decrypts.
+    test "refuses a read omitting a required key with the missing-keys reason, after a default-side read filled the entry",
+         ctx do
+      # Written without required keys: every pair is stored in the header.
+      ciphertext =
+        encrypt(
+          default_client(ctx.keyring),
+          AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+        )
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.default_side, ciphertext, encryption_context: %{})
+
+      assert {:error, {:missing_required_encryption_context_keys, ["required-a"]}} =
+               Client.decrypt(ctx.required_side, ciphertext,
+                 encryption_context: Map.delete(@context, "required-a")
+               )
+
+      assert {:error, {:missing_required_encryption_context_keys, @required}} =
+               Client.decrypt(ctx.required_side, ciphertext, encryption_context: %{})
+    end
+
+    # Sabotage: the same mutation turns this test red: the omitting read
+    # is served the entry the failed default-side read left and fails
+    # header authentication instead.
+    test "refuses with the missing-keys reason, not a header-authentication failure, for a message written before 1.1.0",
+         ctx do
+      ciphertext = fixture(@pre_fix_dir, "required-context-0478.bin")
+
+      # The default CMM cannot read this form (the required keys are the
+      # tail of its header-authentication AAD), but its read still left an
+      # entry in the partition.
+      assert {:error, :header_authentication_failed} =
+               Client.decrypt(ctx.default_side, ciphertext, encryption_context: %{})
+
+      assert {:error, {:missing_required_encryption_context_keys, ["required-b"]}} =
+               Client.decrypt(ctx.required_side, ciphertext,
+                 encryption_context: Map.delete(@context, "required-b")
+               )
+    end
+
+    # Sabotage: resolving no configured keys through a nested Caching CMM
+    # (Caching's reader_required_keys/1 answering [] for it) turns this
+    # test red: the omitting read is served the default side's entry.
+    test "reads the required keys through a nested Caching CMM", ctx do
+      ciphertext =
+        encrypt(
+          default_client(ctx.keyring),
+          AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+        )
+
+      assert {:ok, _first_read} =
+               Client.decrypt(ctx.default_side, ciphertext, encryption_context: %{})
+
+      assert {:error, {:missing_required_encryption_context_keys, ["required-a"]}} =
+               Client.decrypt(ctx.nested_required_side, ciphertext,
+                 encryption_context: Map.delete(@context, "required-a")
+               )
+    end
+
+    # Sabotage: refusing every hit when the reading CMM configures required
+    # keys turns this test red: the second read misses and fails its cold
+    # unwrap.
+    test "still serves a read that reproduces every required key from the cache", ctx do
+      ciphertext =
+        encrypt(required_client(ctx.keyring), AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key())
+
+      assert {:ok, _first_read} =
+               Client.decrypt(ctx.required_side, ciphertext, encryption_context: @context)
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.required_hit_only, ciphertext, encryption_context: @context)
+    end
+  end
+
   describe "a keyring that does not bind the encryption context (raw RSA)" do
     setup do
       {:ok, rsa: rsa_keyring()}
