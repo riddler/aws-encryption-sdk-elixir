@@ -95,8 +95,8 @@ defmodule AwsEncryptionSdk.Stream.ErrorTest do
 
       # Corrupt the last byte of the header (the auth tag)
       header_size = byte_size(header)
-      <<good_header::binary-size(header_size - 1), _last_byte, rest::binary>> = ciphertext
-      corrupted = good_header <> <<0xFF>> <> rest
+      <<good_header::binary-size(header_size - 1), last_byte, rest::binary>> = ciphertext
+      corrupted = good_header <> <<Bitwise.bxor(last_byte, 0x01)>> <> rest
 
       get_materials = fn _header -> {:ok, ctx.dec_materials} end
       {:ok, dec} = Decryptor.init(get_materials: get_materials)
@@ -181,8 +181,8 @@ defmodule AwsEncryptionSdk.Stream.ErrorTest do
 
       # Corrupt the last byte of the signature
       size = byte_size(ciphertext)
-      <<good_part::binary-size(size - 1), _last_byte>> = ciphertext
-      corrupted = good_part <> <<0xFF>>
+      <<good_part::binary-size(size - 1), last_byte>> = ciphertext
+      corrupted = good_part <> <<Bitwise.bxor(last_byte, 0x01)>>
 
       get_materials = fn _header -> {:ok, ctx.signed_dec_materials} end
       {:ok, dec} = Decryptor.init(get_materials: get_materials)
