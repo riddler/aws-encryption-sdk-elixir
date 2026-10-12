@@ -48,6 +48,9 @@ defmodule AwsEncryptionSdk.Encrypt do
   ## Returns
 
   - `{:ok, result}` - Encryption succeeded; result contains ciphertext, header, etc.
+  - `{:error, :max_frames_exceeded}` - The plaintext would need more than
+    2^32 - 1 frames of `:frame_length` bytes, the specification's limit for
+    one message; nothing is encrypted
   - `{:error, reason}` - Encryption failed
   """
   @spec encrypt(EncryptionMaterials.t(), binary(), encrypt_opts()) ::
@@ -60,6 +63,7 @@ defmodule AwsEncryptionSdk.Encrypt do
     # legitimately added reserved keys (e.g., aws-crypto-public-key for signed suites).
     # User-provided context validation should happen at the Client/CMM layer.
     with :ok <- validate_algorithm_suite(materials.algorithm_suite),
+         :ok <- check_frame_count(plaintext, frame_length),
          {:ok, message_id} <- generate_message_id(materials.algorithm_suite),
          {:ok, derived_key, commitment_key} <- derive_keys(materials, message_id),
          {:ok, header} <- build_header(materials, message_id, frame_length, commitment_key),
@@ -94,6 +98,19 @@ defmodule AwsEncryptionSdk.Encrypt do
       {:error, :deprecated_algorithm_suite}
     end
   end
+
+  # Refuse a plaintext that would need more frames than one message may hold,
+  # before anything is encrypted. The frame length itself is not validated
+  # here; a value that is not a positive integer reaches the body as before.
+  defp check_frame_count(plaintext, frame_length)
+       when is_integer(frame_length) and frame_length > 0 do
+    plaintext
+    |> byte_size()
+    |> Body.frame_count(frame_length)
+    |> Body.check_frame_count()
+  end
+
+  defp check_frame_count(_plaintext, _frame_length), do: :ok
 
   # Generate random message ID
   defp generate_message_id(suite) do

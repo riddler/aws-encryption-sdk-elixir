@@ -89,6 +89,13 @@ defmodule AwsEncryptionSdk.Crypto.AesGcmTest do
     test "sequence 256 produces correct IV" do
       assert AesGcm.sequence_number_to_iv(256) == <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0>>
     end
+
+    test "sequence 2^32 - 1 is the last with an IV; a larger one never wraps" do
+      assert AesGcm.sequence_number_to_iv(0xFFFFFFFF) ==
+               <<0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF>>
+
+      assert_raise FunctionClauseError, fn -> AesGcm.sequence_number_to_iv(0x100000001) end
+    end
   end
 
   describe "zero_iv/0" do

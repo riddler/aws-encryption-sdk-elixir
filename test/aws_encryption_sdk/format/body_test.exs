@@ -184,4 +184,66 @@ defmodule AwsEncryptionSdk.Format.BodyTest do
       assert {:error, :invalid_non_framed_body} = Body.deserialize_non_framed(<<1, 2, 3>>)
     end
   end
+
+  describe "frame limit" do
+    # The specification allows at most 2^32 - 1 frames in one message.
+    #
+    # Sabotage: `<` for `<=` in check_frame_count/1, dropping the rounding
+    # in frame_count/2, or lifting either serializer's sequence-number guard
+    # turns the matching test here red.
+    @max_frames 4_294_967_295
+
+    test "frame_count/2 counts an empty plaintext as one final frame" do
+      assert Body.frame_count(0, 1) == 1
+      assert Body.frame_count(0, 4096) == 1
+    end
+
+    test "frame_count/2 rounds a partial frame up and keeps an exact multiple" do
+      assert Body.frame_count(1, 4096) == 1
+      assert Body.frame_count(4096, 4096) == 1
+      assert Body.frame_count(4097, 4096) == 2
+      assert Body.frame_count(3 * 4096, 4096) == 3
+    end
+
+    test "frame_count/2 reaches the limit without a plaintext of that size" do
+      assert Body.frame_count(@max_frames, 1) == @max_frames
+      assert Body.frame_count(@max_frames + 1, 1) == @max_frames + 1
+      assert Body.frame_count(@max_frames * 4096, 4096) == @max_frames
+      assert Body.frame_count(@max_frames * 4096 + 1, 4096) == @max_frames + 1
+    end
+
+    test "check_frame_count/1 accepts 2^32 - 1 frames and refuses one more" do
+      assert :ok = Body.check_frame_count(1)
+      assert :ok = Body.check_frame_count(@max_frames)
+      assert {:error, :max_frames_exceeded} = Body.check_frame_count(@max_frames + 1)
+    end
+
+    test "serialize_regular_frame/4 refuses the final-frame marker as a sequence number" do
+      iv = :crypto.strong_rand_bytes(12)
+      auth_tag = :crypto.strong_rand_bytes(16)
+
+      assert <<0xFFFFFFFE::32-big, _rest::binary>> =
+               Body.serialize_regular_frame(@max_frames - 1, iv, <<1>>, auth_tag)
+
+      assert_raise FunctionClauseError, fn ->
+        Body.serialize_regular_frame(@max_frames, iv, <<1>>, auth_tag)
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        Body.serialize_regular_frame(@max_frames + 2, iv, <<1>>, auth_tag)
+      end
+    end
+
+    test "serialize_final_frame/4 writes 2^32 - 1 and never truncates a larger number" do
+      iv = :crypto.strong_rand_bytes(12)
+      auth_tag = :crypto.strong_rand_bytes(16)
+
+      assert <<0xFFFFFFFF::32-big, 0xFFFFFFFF::32-big, _rest::binary>> =
+               Body.serialize_final_frame(@max_frames, iv, <<1>>, auth_tag)
+
+      assert_raise FunctionClauseError, fn ->
+        Body.serialize_final_frame(@max_frames + 2, iv, <<1>>, auth_tag)
+      end
+    end
+  end
 end
