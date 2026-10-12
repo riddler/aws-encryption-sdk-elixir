@@ -94,8 +94,10 @@ defmodule AwsEncryptionSdk.Stream.SignedSuiteTest do
 
       ciphertext = header <> frames <> final
 
-      # Corrupt the last byte (signature)
-      corrupted = binary_part(ciphertext, 0, byte_size(ciphertext) - 1) <> <<0xFF>>
+      # Corrupt the last byte (signature) by flipping a bit, so the byte always changes
+      size = byte_size(ciphertext)
+      <<good_part::binary-size(size - 1), last_byte>> = ciphertext
+      corrupted = good_part <> <<Bitwise.bxor(last_byte, 0x01)>>
 
       get_materials = fn _header -> {:ok, ctx.dec_materials} end
       {:ok, dec} = Decryptor.init(get_materials: get_materials)
