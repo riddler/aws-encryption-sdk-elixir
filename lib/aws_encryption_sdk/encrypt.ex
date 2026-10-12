@@ -245,7 +245,7 @@ defmodule AwsEncryptionSdk.Encrypt do
 
       # Sign header + body
       message_to_sign = header_binary <> body
-      signature = ECDSA.sign(message_to_sign, private_key, :secp384r1)
+      signature = ECDSA.sign(message_to_sign, private_key, ECDSA.curve_for_suite(suite))
 
       # Footer format: signature_length (2 bytes) + signature
       signature_length = byte_size(signature)

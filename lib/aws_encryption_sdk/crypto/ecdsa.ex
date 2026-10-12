@@ -2,8 +2,11 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   @moduledoc """
   ECDSA operations for AWS Encryption SDK.
 
-  Provides key generation and encoding for P-384 (secp384r1) curve
-  used by signed algorithm suites.
+  Provides key generation, signing, verification and key encoding for the
+  curves of the signed algorithm suites: P-256 (secp256r1, with SHA-256)
+  for 0x0214, and P-384 (secp384r1, with SHA-384) for 0x0346, 0x0378 and
+  0x0578. `curve_for_suite/1` maps a suite to its curve and
+  `hash_for_curve/1` a curve to its hash.
 
   ## Spec Reference
 
@@ -14,7 +17,45 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   @type curve :: :secp384r1 | :secp256r1
 
   @doc """
-  Generates an ECDSA key pair for the P-384 curve.
+  Returns the curve a signed algorithm suite signs on.
+
+  `:ecdsa_p256` (suite 0x0214) signs on `:secp256r1`; `:ecdsa_p384` (suites
+  0x0346, 0x0378 and 0x0578) on `:secp384r1`.
+
+  ## Examples
+
+      iex> suite = AwsEncryptionSdk.AlgorithmSuite.aes_128_gcm_iv12_tag16_hkdf_sha256_ecdsa_p256()
+      iex> AwsEncryptionSdk.Crypto.ECDSA.curve_for_suite(suite)
+      :secp256r1
+
+      iex> suite = AwsEncryptionSdk.AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key_ecdsa_p384()
+      iex> AwsEncryptionSdk.Crypto.ECDSA.curve_for_suite(suite)
+      :secp384r1
+
+  """
+  @spec curve_for_suite(AwsEncryptionSdk.AlgorithmSuite.t()) :: curve()
+  def curve_for_suite(%{signature_algorithm: :ecdsa_p256}), do: :secp256r1
+  def curve_for_suite(%{signature_algorithm: :ecdsa_p384}), do: :secp384r1
+
+  @doc """
+  Returns the hash a curve signs with: SHA-256 on P-256, SHA-384 on P-384.
+
+  ## Examples
+
+      iex> AwsEncryptionSdk.Crypto.ECDSA.hash_for_curve(:secp256r1)
+      :sha256
+
+      iex> AwsEncryptionSdk.Crypto.ECDSA.hash_for_curve(:secp384r1)
+      :sha384
+
+  """
+  @spec hash_for_curve(curve()) :: :sha256 | :sha384
+  def hash_for_curve(:secp256r1), do: :sha256
+  def hash_for_curve(:secp384r1), do: :sha384
+
+  @doc """
+  Generates an ECDSA key pair for the given curve (`:secp256r1` or
+  `:secp384r1`).
 
   Returns `{private_key, public_key}` where:
   - `private_key` is the raw private key bytes
@@ -28,10 +69,14 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
       iex> byte_size(public_key)
       97
 
+      iex> {_private_key, public_key} = AwsEncryptionSdk.Crypto.ECDSA.generate_key_pair(:secp256r1)
+      iex> byte_size(public_key)
+      65
+
   """
   @spec generate_key_pair(curve()) :: key_pair()
-  def generate_key_pair(:secp384r1) do
-    {public_key, private_key} = :crypto.generate_key(:ecdh, :secp384r1)
+  def generate_key_pair(curve) when curve in [:secp256r1, :secp384r1] do
+    {public_key, private_key} = :crypto.generate_key(:ecdh, curve)
     {private_key, public_key}
   end
 
@@ -97,13 +142,14 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   end
 
   @doc """
-  Generates an ECDSA signature over the given message using SHA-384.
+  Generates an ECDSA signature over the given message, with the curve's
+  hash (SHA-256 on P-256, SHA-384 on P-384).
 
   ## Parameters
 
   - `message` - Binary data to sign
-  - `private_key` - Raw private key bytes (48 bytes for P-384)
-  - `curve` - Elliptic curve to use (`:secp384r1`)
+  - `private_key` - Raw private key bytes (32 bytes for P-256, 48 for P-384)
+  - `curve` - Elliptic curve to use (`:secp256r1` or `:secp384r1`)
 
   ## Returns
 
@@ -119,18 +165,21 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
 
   """
   @spec sign(binary(), binary(), curve()) :: binary()
-  def sign(message, private_key, :secp384r1) when is_binary(message) and is_binary(private_key) do
-    :crypto.sign(:ecdsa, :sha384, message, [private_key, :secp384r1])
+  def sign(message, private_key, curve)
+      when curve in [:secp256r1, :secp384r1] and is_binary(message) and is_binary(private_key) do
+    :crypto.sign(:ecdsa, hash_for_curve(curve), message, [private_key, curve])
   end
 
   @doc """
-  Signs a pre-computed digest using ECDSA P-384.
+  Signs a pre-computed digest using ECDSA.
 
   This is useful for streaming where the hash is accumulated incrementally.
+  The digest's size picks the curve: a 32-byte SHA-256 digest signs on
+  P-256, a 48-byte SHA-384 digest on P-384.
 
   ## Parameters
 
-  - `digest` - SHA-384 digest (48 bytes)
+  - `digest` - SHA-256 digest (32 bytes) or SHA-384 digest (48 bytes)
   - `private_key` - Raw private key bytes
 
   ## Returns
@@ -147,6 +196,10 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
 
   """
   @spec sign_digest(binary(), binary()) :: binary()
+  def sign_digest(digest, private_key) when byte_size(digest) == 32 and is_binary(private_key) do
+    :crypto.sign(:ecdsa, :sha256, {:digest, digest}, [private_key, :secp256r1])
+  end
+
   def sign_digest(digest, private_key) when byte_size(digest) == 48 and is_binary(private_key) do
     :crypto.sign(:ecdsa, :sha384, {:digest, digest}, [private_key, :secp384r1])
   end
@@ -154,9 +207,11 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   @doc """
   Verifies an ECDSA signature against a pre-computed digest.
 
+  The digest's size picks the curve, as for `sign_digest/2`.
+
   ## Parameters
 
-  - `digest` - SHA-384 digest (48 bytes)
+  - `digest` - SHA-256 digest (32 bytes) or SHA-384 digest (48 bytes)
   - `signature` - DER-encoded ECDSA signature
   - `public_key` - Raw public key bytes
 
@@ -175,19 +230,25 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   """
   @spec verify_digest(binary(), binary(), binary()) :: boolean()
   def verify_digest(digest, signature, public_key)
+      when byte_size(digest) == 32 and is_binary(signature) and is_binary(public_key) do
+    :crypto.verify(:ecdsa, :sha256, {:digest, digest}, signature, [public_key, :secp256r1])
+  end
+
+  def verify_digest(digest, signature, public_key)
       when byte_size(digest) == 48 and is_binary(signature) and is_binary(public_key) do
     :crypto.verify(:ecdsa, :sha384, {:digest, digest}, signature, [public_key, :secp384r1])
   end
 
   @doc """
-  Verifies an ECDSA signature over the given message using SHA-384.
+  Verifies an ECDSA signature over the given message, with the curve's
+  hash (SHA-256 on P-256, SHA-384 on P-384).
 
   ## Parameters
 
   - `message` - Binary data that was signed
   - `signature` - DER-encoded ECDSA signature
-  - `public_key` - Raw public key bytes (97 bytes uncompressed point for P-384)
-  - `curve` - Elliptic curve to use (`:secp384r1`)
+  - `public_key` - Raw public key bytes, compressed or uncompressed
+  - `curve` - Elliptic curve to use (`:secp256r1` or `:secp384r1`)
 
   ## Returns
 
@@ -204,11 +265,12 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
 
   """
   @spec verify(binary(), binary(), binary(), curve()) :: boolean()
-  def verify(message, signature, public_key, :secp384r1)
-      when is_binary(message) and is_binary(signature) and is_binary(public_key) do
+  def verify(message, signature, public_key, curve)
+      when curve in [:secp256r1, :secp384r1] and is_binary(message) and is_binary(signature) and
+             is_binary(public_key) do
     # Normalize public key to uncompressed format if needed
-    normalized_key = normalize_public_key(public_key, :secp384r1)
-    :crypto.verify(:ecdsa, :sha384, message, signature, [normalized_key, :secp384r1])
+    normalized_key = normalize_public_key(public_key, curve)
+    :crypto.verify(:ecdsa, hash_for_curve(curve), message, signature, [normalized_key, curve])
   end
 
   @doc """

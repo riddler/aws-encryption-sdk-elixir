@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixes signing on suite 0x0214 (AES_128_GCM_IV12_TAG16_HKDF_SHA256_ECDSA_P256):
+  a message written on it now carries a P-256 verification key and a
+  SHA-256 signature, as the suite specifies, and decrypts. Before, the
+  engine signed it with a P-384 key and SHA-384, and its own one-shot
+  decrypt refused the message. The streaming decrypt now verifies on the
+  suite's curve, so it reads correct 0x0214 messages from other SDKs
+  (before, it raised on their P-256 key). For a verification key that is
+  not a point on the suite's curve, `AwsEncryptionSdk.Stream.Decryptor`
+  now returns `{:error, :signature_verification_failed}` instead of
+  raising; through `AwsEncryptionSdk.Stream.decrypt/3` the refusal is the
+  RuntimeError the stream raises for any decrypt error, naming
+  `:signature_verification_failed`. A 0x0214 message written by 1.2.0 or
+  earlier carries a P-384 key and no longer decrypts streaming either; the
+  one-shot decrypt already refused it. Nothing written on suites 0x0346,
+  0x0378 or 0x0578 changes: they still sign with P-384 and SHA-384.
+
 ## [1.2.0] - 2026-10-12
 
 ### Added
