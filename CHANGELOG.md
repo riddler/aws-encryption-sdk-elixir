@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-12
+
 ### Added
 - Refuses an encrypt that would exceed the specification's limit of
   2^32 - 1 frames in one message with `{:error, :max_frames_exceeded}`,
@@ -304,7 +306,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.7.0...v1.0.0
