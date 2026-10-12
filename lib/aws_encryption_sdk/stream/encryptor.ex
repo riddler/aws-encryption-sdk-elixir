@@ -181,19 +181,23 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
 
   Buffers partial frames and emits complete frames. Returns `{:ok, updated_encryptor, frame_bytes}`
   where `frame_bytes` may be empty if not enough data for a complete frame.
+
+  Returns `{:error, :max_frames_exceeded}` when a complete frame would leave no room
+  for the final frame within the specification's limit of 2^32 - 1 frames per
+  message; no frame of that chunk is emitted.
   """
   @spec update(t(), binary()) :: {:ok, t(), binary()} | {:error, term()}
   def update(%__MODULE__{state: :encrypting} = enc, plaintext) when is_binary(plaintext) do
     # Add to buffer
     buffer = enc.buffer <> plaintext
 
-    # Extract complete frames
-    {frames, remaining_buffer, enc} = extract_frames(buffer, enc)
+    # Extract complete frames; a refusal leaves the caller's encryptor as it was
+    with {:ok, frames, remaining_buffer, enc} <- extract_frames(buffer, enc) do
+      # Serialize frames
+      frame_bytes = IO.iodata_to_binary(frames)
 
-    # Serialize frames
-    frame_bytes = IO.iodata_to_binary(frames)
-
-    {:ok, %{enc | buffer: remaining_buffer}, frame_bytes}
+      {:ok, %{enc | buffer: remaining_buffer}, frame_bytes}
+    end
   end
 
   def update(%__MODULE__{state: state}, _plaintext) do
@@ -204,10 +208,22 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
   Finalizes encryption.
 
   Encrypts any remaining buffered data as the final frame, optionally adds footer.
-  Returns `{:ok, updated_encryptor, final_bytes}`.
+  Returns `{:ok, updated_encryptor, final_bytes}`, or `{:error, :max_frames_exceeded}`
+  when the final frame would exceed the specification's limit of 2^32 - 1 frames
+  per message.
   """
   @spec finalize(t()) :: {:ok, t(), binary()} | {:error, term()}
   def finalize(%__MODULE__{state: :encrypting} = enc) do
+    with :ok <- Body.check_frame_count(enc.sequence_number) do
+      do_finalize(enc)
+    end
+  end
+
+  def finalize(%__MODULE__{state: state}) do
+    {:error, {:invalid_state, state, :expected_encrypting}}
+  end
+
+  defp do_finalize(enc) do
     # Encrypt remaining buffer as final frame
     final_frame = encrypt_frame(enc.buffer, enc, true)
 
@@ -230,10 +246,6 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
       end
 
     {:ok, %{enc | state: :done, buffer: <<>>, signature_acc: nil}, final_frame <> footer_binary}
-  end
-
-  def finalize(%__MODULE__{state: state}) do
-    {:error, {:invalid_state, state, :expected_encrypting}}
   end
 
   @doc """
@@ -312,7 +324,7 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
   end
 
   defp extract_frames(buffer, enc) when byte_size(buffer) < enc.frame_length do
-    {[], buffer, enc}
+    {:ok, [], buffer, enc}
   end
 
   defp extract_frames(buffer, enc) do
@@ -320,10 +332,18 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
   end
 
   defp extract_frames_loop(buffer, enc, acc) when byte_size(buffer) < enc.frame_length do
-    {Enum.reverse(acc), buffer, enc}
+    {:ok, Enum.reverse(acc), buffer, enc}
   end
 
   defp extract_frames_loop(buffer, enc, acc) do
+    # A final frame follows every regular frame, so a regular frame numbered n
+    # makes the message at least n + 1 frames long.
+    with :ok <- Body.check_frame_count(enc.sequence_number + 1) do
+      extract_frame(buffer, enc, acc)
+    end
+  end
+
+  defp extract_frame(buffer, enc, acc) do
     <<chunk::binary-size(enc.frame_length), rest::binary>> = buffer
     frame = encrypt_frame(chunk, enc, false)
 

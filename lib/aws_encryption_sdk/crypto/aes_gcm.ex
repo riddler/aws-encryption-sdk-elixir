@@ -88,11 +88,13 @@ defmodule AwsEncryptionSdk.Crypto.AesGcm do
   Constructs an IV from a sequence number.
 
   The IV is the sequence number padded to 12 bytes (big-endian).
-  Used for frame encryption/decryption.
+  Used for frame encryption/decryption. A sequence number above 2^32 - 1
+  has no IV: it would wrap onto another frame's.
   """
   @spec sequence_number_to_iv(non_neg_integer()) :: binary()
   def sequence_number_to_iv(sequence_number)
-      when is_integer(sequence_number) and sequence_number >= 0 do
+      when is_integer(sequence_number) and sequence_number >= 0 and
+             sequence_number <= 0xFFFFFFFF do
     <<0::64, sequence_number::32-big>>
   end
 

@@ -5,6 +5,8 @@ defmodule AwsEncryptionSdk.EncryptTest do
   alias AwsEncryptionSdk.Crypto.ECDSA
   alias AwsEncryptionSdk.Decrypt
   alias AwsEncryptionSdk.Encrypt
+  alias AwsEncryptionSdk.Format.Body
+  alias AwsEncryptionSdk.Format.Header
   alias AwsEncryptionSdk.Materials.DecryptionMaterials
   alias AwsEncryptionSdk.Materials.EncryptedDataKey
   alias AwsEncryptionSdk.Materials.EncryptionMaterials
@@ -217,6 +219,34 @@ defmodule AwsEncryptionSdk.EncryptTest do
 
       assert {:ok, dec_result} = Decrypt.decrypt(enc_result.ciphertext, dec_materials)
       assert dec_result.plaintext == plaintext
+    end
+  end
+
+  describe "frame limit" do
+    # A plaintext that would exceed the specification's 2^32 - 1 frames is
+    # at least 4 GiB, so these tests pin the count the one-shot path checks
+    # (Body.frame_count/2 against Body.check_frame_count/1, whose bound the
+    # body tests pin) against the frames it writes. Dropping the rounding in
+    # Body.frame_count/2 turns this test red. Dropping the check from
+    # Encrypt.encrypt/3 turns no test red: driving it needs a 4 GiB
+    # plaintext at a 1-byte frame length, which it refuses before anything
+    # is encrypted.
+    test "writes as many frames as the count it checks" do
+      suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      plaintext_data_key = :crypto.strong_rand_bytes(32)
+      edk = EncryptedDataKey.new("provider", "key", plaintext_data_key)
+      materials = EncryptionMaterials.new(suite, %{}, [edk], plaintext_data_key)
+
+      for {size, frame_length} <- [{0, 1}, {1, 1}, {5, 1}, {9, 4}, {12, 4}, {13, 4}] do
+        plaintext = :crypto.strong_rand_bytes(size)
+
+        assert {:ok, result} = Encrypt.encrypt(materials, plaintext, frame_length: frame_length)
+        {:ok, _header, body} = Header.deserialize(result.ciphertext)
+        {:ok, frames, <<>>} = Body.deserialize_all_frames(body, frame_length)
+
+        assert length(frames) == Body.frame_count(size, frame_length)
+        assert List.last(frames).sequence_number == length(frames)
+      end
     end
   end
 
