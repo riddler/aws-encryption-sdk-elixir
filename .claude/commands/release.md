@@ -1,11 +1,20 @@
 ---
-description: Automate version releases with CHANGELOG analysis and multi-file updates
+description: Prepare a version release (bump, CHANGELOG, README) for a CI publish on a tag push
 model: sonnet
 ---
 
 # Release New Version
 
-This command automates the release process for the AWS Encryption SDK for Elixir.
+This command prepares a release of the AWS Encryption SDK for Elixir: the
+version bump, the CHANGELOG promotion and the README status line, committed
+as one `Releases vX.Y.Z` commit and opened as a pull request.
+
+It does not publish. Publishing is done by `.github/workflows/release.yml`,
+which runs when a `v*.*.*` tag is pushed. The workflow checks that the
+tagged commit is on `main`, that the tag names the `@version` in `mix.exs`,
+and that Hex does not already show the version, then runs the quality gate
+and publishes. Nobody runs the Hex publish command by hand, from this
+command or from a shell.
 
 ## Process:
 
@@ -17,13 +26,20 @@ This command automates the release process for the AWS Encryption SDK for Elixir
    ```
    - If output is not empty, STOP and inform user: "Working directory has uncommitted changes. Please commit or stash changes before releasing."
 
-2. **Run quality checks**:
+2. **Start from the latest main**:
+   ```bash
+   git fetch origin
+   git switch -c release-prep origin/main
+   ```
+   - Once the version is confirmed in Step 2, rename it: `git branch -m release-vX.Y.Z`.
+
+3. **Run quality checks**:
    ```bash
    mix quality
    ```
    - If any checks fail, STOP and inform user: "Quality checks failed. Please fix issues before releasing."
 
-3. **Verify CHANGELOG has unreleased changes**:
+4. **Verify CHANGELOG has unreleased changes**:
    - Read CHANGELOG.md
    - Check that `## [Unreleased]` section has content (not just empty categories)
    - If empty, STOP and inform user: "No unreleased changes found in CHANGELOG.md"
@@ -39,16 +55,14 @@ This command automates the release process for the AWS Encryption SDK for Elixir
    - Fixed
    - Security
 
-3. **Get current version** from the most recent version heading (e.g., `## [0.1.0]`)
+3. **Get current version** from the most recent version heading (e.g., `## [1.1.0]`)
 
-4. **Determine suggested version bump**:
-   - If "Added" has substantial new features → suggest MINOR bump (0.X.0 → 0.Y.0)
-   - If only "Fixed" or "Changed" entries → suggest PATCH bump (0.X.Y → 0.X.Z)
-   - Breaking changes in pre-1.0 can be MINOR bumps
+4. **Determine suggested version bump** (see `guides/STABILITY.md` for what counts as breaking):
+   - Breaking changes to the public API -> MAJOR bump (X.0.0)
+   - "Added" with new features, or a "Deprecated" entry -> MINOR bump (X.Y.0)
+   - Only "Fixed", "Changed" or "Security" entries that keep the public API -> PATCH bump (X.Y.Z)
 
-5. **Validate version < 1.0.0**:
-   - This skill only supports pre-1.0 releases
-   - If calculated version would be >= 1.0.0, inform user this requires manual handling
+   There is no version ceiling. The version is the maintainer's call; the suggestion is only a starting point.
 
 ### Step 2: Calculate and Confirm Version
 
@@ -56,43 +70,33 @@ This command automates the release process for the AWS Encryption SDK for Elixir
    - Extract from last version heading: `## [X.Y.Z] - YYYY-MM-DD`
    - Parse into major, minor, patch components
 
-2. **Apply version bump rules**:
+2. **Present to user for confirmation**:
    ```
-   Current: 0.MINOR.PATCH
-
-   If unreleased has "Added" entries with new features:
-     → Suggested: 0.(MINOR+1).0
-
-   If unreleased only has "Fixed", "Changed", or "Security":
-     → Suggested: 0.MINOR.(PATCH+1)
-   ```
-
-3. **Present to user for confirmation**:
-   ```
-   Based on the unreleased changes, I suggest version 0.2.0:
+   Based on the unreleased changes, I suggest version 1.2.0:
 
    **Unreleased Changes:**
    ### Added
    - Feature A (#XX)
-   - Feature B (#YY)
 
    ### Changed
    - Change description
 
-   **Current version**: 0.1.0
-   **Suggested version**: 0.2.0 (minor bump due to new features)
+   **Current version**: 1.1.0
+   **Suggested version**: 1.2.0 (minor bump due to new features)
 
    Please confirm the version number or provide an alternative:
    ```
 
-4. **Validate user-provided version**:
+3. **Validate user-provided version**:
    - Must be valid semver format (X.Y.Z)
    - Must be greater than current version
-   - Must be < 1.0.0
    - If invalid, explain and ask again
 
-5. **Create release branch**:
-   - Create a new git branch named 'vX.Y.Z' (fill in the actual version numbers, but prefix with 'v')
+4. **Check the tag is free**:
+   ```bash
+   git rev-parse -q --verify refs/tags/vX.Y.Z
+   ```
+   - If it prints a commit, STOP: a released tag is never moved, deleted or reused.
 
 ### Step 3: Update CHANGELOG.md
 
@@ -104,13 +108,13 @@ After version confirmation, update CHANGELOG.md:
    - Find the line `## [Unreleased]`
    - The content between `## [Unreleased]` and the next `## [X.Y.Z]` heading is the unreleased content
    - Insert `## [NEW_VERSION] - YYYY-MM-DD` after the unreleased content
-   - Keep the `## [Unreleased]` heading with empty subsections for future changes
+   - Keep the `## [Unreleased]` heading, empty, for future changes
 
 3. **Restructure to**:
    ```markdown
    ## [Unreleased]
 
-   ## [0.2.0] - 2026-01-25
+   ## [1.2.0] - 2026-01-25
 
    ### Added
    - (moved content from unreleased)
@@ -118,7 +122,7 @@ After version confirmation, update CHANGELOG.md:
    ### Changed
    - (moved content from unreleased)
 
-   ## [0.1.0] - 2025-01-12
+   ## [1.1.0] - 2026-10-07
    ...
    ```
 
@@ -129,15 +133,15 @@ After version confirmation, update CHANGELOG.md:
 
    **Before:**
    ```markdown
-   [Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.1.0...HEAD
-   [0.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/releases/tag/v0.1.0
+   [Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...HEAD
+   [1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
    ```
 
    **After:**
    ```markdown
-   [Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.2.0...HEAD
-   [0.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v0.1.0...v0.2.0
-   [0.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/releases/tag/v0.1.0
+   [Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.0...HEAD
+   [1.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...v1.2.0
+   [1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
    ```
 
    Note: New version uses compare URL (previous...new), only the initial release uses releases/tag URL
@@ -145,130 +149,76 @@ After version confirmation, update CHANGELOG.md:
 ### Step 4: Update mix.exs
 
 1. **Find the @version attribute** (should be near top of file, around line 4)
-2. **Update to new version**:
+2. **Update to new version**. The release workflow refuses a tag that does not name this value.
 
    **Before:**
    ```elixir
-   @version "0.1.0"
+   @version "1.1.0"
    ```
 
    **After:**
    ```elixir
-   @version "0.2.0"
+   @version "1.2.0"
    ```
 
 ### Step 5: Update README.md Version
 
-1. **Update Current Status version** (around line 16):
+1. **Update the Current Status version line** (around line 14):
 
    **Before:**
    ```markdown
-   **Version**: 0.1.0 (pre-release)
+   **Version**: 1.1.0
    ```
 
    **After:**
    ```markdown
-   **Version**: 0.2.0 (pre-release)
+   **Version**: 1.2.0
    ```
 
-2. **Update installation instructions** (around line 47):
+2. **Update the installation pins** (the minimal and the KMS deps blocks) only when the MAJOR or MINOR component changed and the old pin would no longer resolve the new version, or when the release needs a newer minimum. A patch release leaves the pins alone.
 
    **Before:**
    ```elixir
-   {:aws_encryption_sdk, "~> 0.1.0"}
+   {:aws_encryption_sdk, "~> 1.1"}
    ```
 
-   **After:**
+   **After (a minor that needs it):**
    ```elixir
-   {:aws_encryption_sdk, "~> 0.2.0"}
+   {:aws_encryption_sdk, "~> 1.2"}
    ```
 
-### Step 6: Sync README.md Features with CHANGELOG
-
-Based on the CHANGELOG "Added" entries, update the feature lists:
-
-1. **Identify newly implemented features** from CHANGELOG ### Added section
-
-2. **For each new feature, check if it matches a "Not Yet Implemented" item**:
-   - Use fuzzy matching on key terms
-   - Examples of matches:
-     - CHANGELOG: "Keyring behaviour interface" → README: "Keyrings (Raw AES, Raw RSA, AWS KMS)"
-     - CHANGELOG: "Raw AES keyring implementation" → README: "Keyrings (Raw AES, Raw RSA, AWS KMS)"
-
-3. **Move matched items** from "Not Yet Implemented" to "Implemented Features":
-   - Change `- ❌` to `- ✅`
-   - Update description if needed to match what was actually implemented
-   - If only partial implementation (e.g., just Raw AES keyring, not all keyrings), update the description accordingly
-
-4. **Add new implemented features** if not already in either list:
-   - Add to "Implemented Features" section with `- ✅` prefix
-
-**Matching Keywords Table:**
-
-| CHANGELOG Terms | README "Not Yet Implemented" Item |
-|-----------------|-----------------------------------|
-| keyring behaviour, keyring interface | Keyrings (Raw AES, Raw RSA, AWS KMS) |
-| raw aes keyring | Keyrings (Raw AES, Raw RSA, AWS KMS) |
-| raw rsa keyring | Keyrings (Raw AES, Raw RSA, AWS KMS) |
-| aws kms keyring | Keyrings (Raw AES, Raw RSA, AWS KMS) |
-| cmm, materials manager | Cryptographic Materials Manager (CMM) |
-| streaming | Streaming encryption/decryption |
-| ecdsa, signing, signature | ECDSA signing for signed algorithm suites |
-
-5. **Present changes for approval** before applying
-
-### Step 7: Update CLAUDE.md Milestones
+### Step 6: Update CLAUDE.md Milestones
 
 Based on the CHANGELOG "Added" entries, check off completed milestone items:
 
-1. **Read CLAUDE.md** and find the "Development Milestones" section (lines 245-279)
+1. **Read CLAUDE.md** and find the "Development Milestones" section
 
-2. **For each CHANGELOG "Added" entry, check if it matches a milestone item**:
-
-**Matching Table:**
+2. **For each CHANGELOG "Added" entry, check if it matches an unchecked milestone item**:
 
 | CHANGELOG Terms | CLAUDE.md Milestone Item |
 |-----------------|--------------------------|
-| algorithm suite | Algorithm suite definitions |
-| hkdf | HKDF implementation |
-| message format, serialization, header, body | Message format serialization |
-| encrypt, decrypt (basic) | Basic encryption/decryption (non-streaming) |
-| keyring behaviour, keyring interface | Keyring behaviour |
-| raw aes keyring | Raw AES Keyring |
-| raw rsa keyring | Raw RSA Keyring |
-| multi-keyring, multi keyring | Multi-Keyring |
-| cmm behaviour | CMM behaviour |
-| default cmm | Default CMM |
-| encrypt api, commitment policy (encrypt) | Encrypt API with commitment policy |
-| decrypt api, commitment policy (decrypt) | Decrypt API with commitment policy |
-| aws kms keyring | AWS KMS Keyring |
-| kms discovery | AWS KMS Discovery Keyring |
-| mrk, multi-region | AWS KMS MRK-aware keyrings |
-| streaming | Streaming encryption/decryption |
-| caching cmm | Caching CMM |
-| required encryption context | Required encryption context CMM |
 | test vector | Full test vector suite |
 | interoperability, cross-sdk | Cross-SDK interoperability |
 | benchmark, performance | Performance benchmarks |
-| security review, audit | Security review |
+| security review | Security review |
 
-3. **Update matched items** from `- [ ]` to `- [x]`
+3. **Update matched items** from `- [ ]` to `- [x]`. The evidence is worded honestly: a self-review is never recorded as an audit.
 
-4. **Present changes for approval** before applying
+4. **Present changes for approval** before applying. Skip this step when nothing matches.
 
-### Step 8: Review Changes
+### Step 7: Review Changes
 
 Before committing, present all changes for user review:
 
 1. **Show summary of changes**:
    ```
-   ## Release Summary: v0.2.0
+   ## Release Summary: v1.2.0
 
    **Files to be updated:**
    - CHANGELOG.md: New version section, updated links
-   - mix.exs: Version 0.1.0 → 0.2.0
-   - README.md: Version updated, X features moved to implemented
-   - CLAUDE.md: X milestone items checked off
+   - mix.exs: Version 1.1.0 -> 1.2.0
+   - README.md: Version line (and install pins if they moved)
+   - CLAUDE.md: milestone items checked off, if any
 
    **Changes from CHANGELOG:**
    ### Added
@@ -284,38 +234,36 @@ Before committing, present all changes for user review:
 
 3. **Ask for final approval**:
    ```
-   Ready to create release commit for v0.2.0.
+   Ready to create release commit for v1.2.0.
 
    Please review the changes above and confirm to proceed.
    ```
 
-### Step 9: Create Release Commit
+### Step 8: Create Release Commit
 
 After user approval:
 
-1. **Stage all modified files**:
+1. **Stage the modified files** (name them, never `git add -A`):
    ```bash
-   git add CHANGELOG.md mix.exs README.md CLAUDE.md
+   git add CHANGELOG.md mix.exs README.md
    ```
+   Add `CLAUDE.md` only if Step 6 changed it.
 
-2. **Create commit** with release message:
+2. **Create commit** with release message, in the repo's own commit style (see `.claude/commands/commit.md`):
    ```bash
    git commit -m "$(cat <<'EOF'
-   Releases v0.2.0
+   Releases v1.2.0
 
-   ### Added
-   - Feature A (#XX)
-   - Feature B (#YY)
-
-   ### Changed
-   - Change description
+   - Bumps @version to 1.2.0 and the README's status line to match
+   - Promotes the CHANGELOG's Unreleased entries to 1.2.0 and updates
+     the compare links; the entries are unchanged
    EOF
    )"
    ```
 
    **Important:**
    - Title format: `Releases vX.Y.Z`
-   - Body: Copy the changelog entries for this version
+   - Body: present-tense bullets wrapped at 72 characters that say what the release commit changed (version bump, README line and pins, CHANGELOG promotion); a long release may copy the CHANGELOG entries instead
    - Do NOT include co-authored-by or any attribution
 
 3. **Verify commit**:
@@ -323,19 +271,33 @@ After user approval:
    git log --oneline -n 1
    ```
 
-4. **Inform user of next steps**:
+### Step 9: Open the Pull Request
+
+1. **Push the branch and open a pull request** against `main`. The release commit lands on `main` through the pull request, like any other change; the checks must be green first.
+
+2. **Tell the user the next steps**:
    ```
-   Release v0.2.0 committed successfully!
+   Release v1.2.0 committed and the pull request is open.
 
    Next steps:
-   1. Push to remote: `git push`
-   2. Create GitHub release (optional): `gh release create v0.2.0`
-   3. Publish to Hex.pm: `mix hex.publish`
+   1. Merge the pull request once its checks are green.
+   2. Pull main, then tag the merge commit and push the tag:
+      git switch main && git pull
+      git tag v1.2.0
+      git push origin v1.2.0
+   3. The Release workflow publishes to Hex from the tag push. Follow it on the Actions page.
    ```
+
+### Step 10: After the Tag Push
+
+- The workflow verifies and publishes; nothing is run locally.
+- If the publish step fails on a registry or network error, re-run that workflow run from the Actions page. Never work round a failure with a local publish.
+- If a check before the publish step fails (not on `main`, tag and `@version` differ, the version is already on Hex, or the gate is red), nothing was published. Fix the cause on a new commit through a pull request; a tag that already reached a published version is never moved or deleted.
 
 ## Important Guidelines
 
 - **NEVER add co-author information or Claude attribution** to release commits
+- **Never run the Hex publish command by hand**; the tag push is the only publish path
 - **Always get user confirmation** before making any file changes
 - **Always get user confirmation** before creating the commit
 - **Validate all inputs** (version format, git state, etc.)
