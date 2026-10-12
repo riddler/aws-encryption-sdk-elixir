@@ -234,12 +234,18 @@ defmodule AwsEncryptionSdk.Format.BodyTest do
       end
     end
 
+    # Sabotage: widening the guard to `sequence_number <= @max_frames + 1`
+    # turns this test red at 2^32, the first number past the limit.
     test "serialize_final_frame/4 writes 2^32 - 1 and never truncates a larger number" do
       iv = :crypto.strong_rand_bytes(12)
       auth_tag = :crypto.strong_rand_bytes(16)
 
       assert <<0xFFFFFFFF::32-big, 0xFFFFFFFF::32-big, _rest::binary>> =
                Body.serialize_final_frame(@max_frames, iv, <<1>>, auth_tag)
+
+      assert_raise FunctionClauseError, fn ->
+        Body.serialize_final_frame(@max_frames + 1, iv, <<1>>, auth_tag)
+      end
 
       assert_raise FunctionClauseError, fn ->
         Body.serialize_final_frame(@max_frames + 2, iv, <<1>>, auth_tag)

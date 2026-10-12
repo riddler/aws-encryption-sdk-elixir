@@ -90,10 +90,14 @@ defmodule AwsEncryptionSdk.Crypto.AesGcmTest do
       assert AesGcm.sequence_number_to_iv(256) == <<0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0>>
     end
 
+    # Sabotage: widening the guard to `sequence_number <= 0x100000000` turns
+    # this test red at 2^32 (the first value past the bound), which would
+    # wrap onto sequence number 0's IV.
     test "sequence 2^32 - 1 is the last with an IV; a larger one never wraps" do
       assert AesGcm.sequence_number_to_iv(0xFFFFFFFF) ==
                <<0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF>>
 
+      assert_raise FunctionClauseError, fn -> AesGcm.sequence_number_to_iv(0x100000000) end
       assert_raise FunctionClauseError, fn -> AesGcm.sequence_number_to_iv(0x100000001) end
     end
   end

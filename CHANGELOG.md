@@ -11,9 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refuses an encrypt that would exceed the specification's limit of
   2^32 - 1 frames in one message with `{:error, :max_frames_exceeded}`,
   in the one-shot encrypt (before anything is encrypted) and in the
-  streaming encryptor's `update/2` and `finalize/1`. Before, nothing
-  checked the count, and a frame numbered past the limit would have been
-  written with its sequence number truncated to 32 bits. The limit is out
+  streaming encryptor's `update/2` and `finalize/1`. Through
+  `AwsEncryptionSdk.Stream.encrypt/3` the refusal is not a tuple: the
+  stream raises the RuntimeError it raises for any error from `update/2`,
+  "Encryption failed: :max_frames_exceeded". Before, nothing checked the
+  count, and a frame numbered past the limit would have been written with
+  its sequence number truncated to 32 bits. The limit is out
   of reach at the default frame length (about 16 TiB of plaintext); a
   1-byte frame length reaches it at 4 GiB.
 
