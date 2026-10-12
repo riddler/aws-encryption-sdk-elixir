@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Refuses a decrypt through a Caching CMM over the required encryption
+  context CMM that omits a required key with
+  `{:missing_required_encryption_context_keys, keys}` when another Caching
+  CMM over a different configuration (the default CMM) shares its cache
+  and partition id. The decryption cache hit check now also requires the
+  reading CMM's own required keys, read through nested Caching CMMs, so
+  such a read goes to the underlying CMM instead of being served the other
+  CMM's entry: before, it decrypted a message whose header stores the
+  keys, and failed header authentication on a message written before
+  1.1.0.
+
 ## [1.1.0] - 2026-10-07
 
 ### Changed

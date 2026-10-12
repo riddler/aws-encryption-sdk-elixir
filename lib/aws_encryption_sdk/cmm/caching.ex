@@ -288,7 +288,9 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     case LocalCache.get_cache_entry(cmm.cache, cache_id) do
       {:ok, entry} ->
         # Decryption doesn't track usage limits
-        if bound_context_agrees?(entry.materials, request) do
+        reader_keys = reader_required_keys(cmm.underlying_cmm)
+
+        if bound_context_agrees?(entry.materials, request, reader_keys) do
           {:ok, entry.materials}
         else
           fetch_and_cache_decryption_materials(cmm, cache_id, request)
@@ -309,6 +311,11 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   #   * every key in the entry's required set, stored or not, is reproduced
   #     (a cold read through the default CMM or a required-context CMM
   #     refuses or fails without it);
+  #   * every key the READING CMM requires is reproduced. The entry's
+  #     required set is the one the CMM that filled it computed, and a
+  #     Caching CMM over another configuration (a default CMM sharing the
+  #     cache and partition id) fills it without this reader's keys; a
+  #     cold read through this reader refuses with the missing-keys reason;
   #   * the reproduced pairs the header does not store are exactly the
   #     pairs the cached entry bound outside the header (its required keys
   #     absent from the stored context, with their values).
@@ -320,7 +327,7 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   # a correct reader fail, and a disagreeing reader is refused by the same
   # unwrap or header authentication as on a cold read. The cache id, and so
   # the hit rate for agreeing readers, is unchanged.
-  defp bound_context_agrees?(materials, request) do
+  defp bound_context_agrees?(materials, request, reader_keys) do
     reproduced = Map.get(request, :reproduced_encryption_context) || %{}
     stored = request.encryption_context
 
@@ -334,11 +341,25 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
       )
 
     required_reproduced? =
-      Enum.all?(materials.required_encryption_context_keys || [], &Map.has_key?(reproduced, &1))
+      Enum.all?(
+        (materials.required_encryption_context_keys || []) ++ reader_keys,
+        &Map.has_key?(reproduced, &1)
+      )
 
     stored_agrees? and required_reproduced? and
       Map.drop(reproduced, Map.keys(stored)) == bound_outside_header
   end
+
+  # The keys a CMM chain refuses a decrypt without: each required-context
+  # CMM's configured keys, read through nested Caching CMMs. The default
+  # CMM configures none.
+  defp reader_required_keys(%__MODULE__{underlying_cmm: underlying}),
+    do: reader_required_keys(underlying)
+
+  defp reader_required_keys(%RequiredEncryptionContext{} = cmm),
+    do: cmm.required_encryption_context_keys ++ reader_required_keys(cmm.underlying_cmm)
+
+  defp reader_required_keys(_cmm), do: []
 
   defp fetch_and_cache_decryption_materials(cmm, cache_id, request) do
     with {:ok, materials} <- call_underlying_cmm_decrypt(cmm.underlying_cmm, request) do
