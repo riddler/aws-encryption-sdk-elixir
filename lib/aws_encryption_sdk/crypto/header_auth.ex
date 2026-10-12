@@ -60,6 +60,28 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   end
 
   @doc """
+  Deprecated: the `compute_header_auth_tag/2` arity takes the required pairs from the
+  header's stored encryption context, which no longer holds them. Use
+  `compute_header_auth_tag/4`, which takes the full encryption context and the required keys.
+  Kept, not removed; removal waits for a major release.
+  """
+  @spec compute_header_auth_tag(Header.t(), binary()) :: {:ok, Header.t()}
+  @deprecated "Use compute_header_auth_tag/4 with the full encryption context and the required keys"
+  def compute_header_auth_tag(header, derived_key),
+    do: compute_header_auth_tag(header, derived_key, [], nil)
+
+  @doc """
+  Deprecated: the `compute_header_auth_tag/3` arity takes the required pairs from the
+  header's stored encryption context, which no longer holds them. Use
+  `compute_header_auth_tag/4`, which takes the full encryption context and the required keys.
+  Kept, not removed; removal waits for a major release.
+  """
+  @spec compute_header_auth_tag(Header.t(), binary(), [String.t()]) :: {:ok, Header.t()}
+  @deprecated "Use compute_header_auth_tag/4 with the full encryption context and the required keys"
+  def compute_header_auth_tag(header, derived_key, required_ec_keys),
+    do: compute_header_auth_tag(header, derived_key, required_ec_keys, nil)
+
+  @doc """
   Computes the header authentication tag.
 
   Returns a new header with the computed authentication tag.
@@ -69,25 +91,15 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   - `header` - The message header
   - `derived_key` - The derived data encryption key
   - `full_encryption_context` - The complete encryption context (stored + required keys)
-  - `required_ec_keys` - List of required encryption context keys (defaults to empty list)
+  - `required_ec_keys` - List of required encryption context keys (may be `[]`)
 
   Per the spec, the AAD is: header_body || required_encryption_context_bytes
   where required_encryption_context_bytes is the serialization of only the
   encryption context keys in the required_ec_keys list from the full EC.
   """
-  @spec compute_header_auth_tag(
-          Header.t(),
-          binary(),
-          map() | [String.t()],
-          [String.t()] | nil
-        ) ::
+  @spec compute_header_auth_tag(Header.t(), binary(), map() | [String.t()], [String.t()] | nil) ::
           {:ok, Header.t()}
-  def compute_header_auth_tag(
-        header,
-        derived_key,
-        full_ec_or_required_keys \\ [],
-        required_ec_keys_opt \\ nil
-      ) do
+  def compute_header_auth_tag(header, derived_key, full_ec_or_required_keys, required_ec_keys_opt) do
     # Handle both old (3-param) and new (4-param) signatures for backwards compatibility
     {full_encryption_context, required_ec_keys} =
       case {full_ec_or_required_keys, required_ec_keys_opt} do
@@ -130,6 +142,28 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   end
 
   @doc """
+  Deprecated: the `verify_header_auth_tag/2` arity takes the required pairs from the
+  header's stored encryption context, which no longer holds them. Use
+  `verify_header_auth_tag/4`, which takes the full encryption context and the required keys.
+  Kept, not removed; removal waits for a major release.
+  """
+  @spec verify_header_auth_tag(Header.t(), binary()) :: :ok | {:error, term()}
+  @deprecated "Use verify_header_auth_tag/4 with the full encryption context and the required keys"
+  def verify_header_auth_tag(header, derived_key),
+    do: verify_header_auth_tag(header, derived_key, [], nil)
+
+  @doc """
+  Deprecated: the `verify_header_auth_tag/3` arity takes the required pairs from the
+  header's stored encryption context, which no longer holds them. Use
+  `verify_header_auth_tag/4`, which takes the full encryption context and the required keys.
+  Kept, not removed; removal waits for a major release.
+  """
+  @spec verify_header_auth_tag(Header.t(), binary(), [String.t()]) :: :ok | {:error, term()}
+  @deprecated "Use verify_header_auth_tag/4 with the full encryption context and the required keys"
+  def verify_header_auth_tag(header, derived_key, required_ec_keys),
+    do: verify_header_auth_tag(header, derived_key, required_ec_keys, nil)
+
+  @doc """
   Verifies the header authentication tag.
 
   Returns `:ok` if verification succeeds, `{:error, reason}` otherwise.
@@ -139,7 +173,7 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   - `header` - The message header
   - `derived_key` - The derived data encryption key
   - `full_encryption_context` - The complete encryption context (stored + required keys)
-  - `required_ec_keys` - List of required encryption context keys (defaults to empty list)
+  - `required_ec_keys` - List of required encryption context keys (may be `[]`)
 
   Per the spec, the AAD is: header_body || required_encryption_context_bytes
   where required_encryption_context_bytes is the serialization of only the
@@ -147,12 +181,7 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuth do
   """
   @spec verify_header_auth_tag(Header.t(), binary(), map() | [String.t()], [String.t()] | nil) ::
           :ok | {:error, term()}
-  def verify_header_auth_tag(
-        header,
-        derived_key,
-        full_ec_or_required_keys \\ [],
-        required_ec_keys_opt \\ nil
-      ) do
+  def verify_header_auth_tag(header, derived_key, full_ec_or_required_keys, required_ec_keys_opt) do
     # Handle both old (3-param) and new (4-param) signatures for backwards compatibility
     {full_encryption_context, required_ec_keys} =
       case {full_ec_or_required_keys, required_ec_keys_opt} do

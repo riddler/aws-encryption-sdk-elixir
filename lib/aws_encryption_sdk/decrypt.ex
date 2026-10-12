@@ -23,6 +23,15 @@ defmodule AwsEncryptionSdk.Decrypt do
   alias AwsEncryptionSdk.Format.Message
   alias AwsEncryptionSdk.Materials.DecryptionMaterials
 
+  @typedoc """
+  The result of a successful decryption.
+
+  `:encryption_context` is the context stored in the message header. Required
+  encryption context pairs are authenticated but not stored (messages written
+  by 1.1.0 and later), so they are absent from it; they are the pairs the
+  caller reproduced, and the caller already holds them. Messages written by
+  earlier versions stored them, and for those they appear here.
+  """
   @type decrypt_result :: %{
           plaintext: binary(),
           header: Header.t(),
@@ -39,7 +48,8 @@ defmodule AwsEncryptionSdk.Decrypt do
 
   ## Returns
 
-  - `{:ok, result}` - Decryption succeeded; result contains plaintext, header, and encryption context
+  - `{:ok, result}` - Decryption succeeded; result contains plaintext, header, and the stored
+    encryption context (see `t:decrypt_result/0`)
   - `{:error, reason}` - Decryption failed
 
   ## Errors
