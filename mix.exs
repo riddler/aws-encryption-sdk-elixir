@@ -74,10 +74,26 @@ defmodule AwsEncryptionSdk.MixProject do
   # project's own suite against it. Running `mix deps.get` with it set
   # rewrites hackney and ex_aws in mix.lock - do not commit a lock
   # produced that way.
+  #
+  # KMS_FLOORS exists for CI only: the default ranges above cannot force
+  # the lowest versions they admit, so it pins ex_aws to exactly 2.6.0
+  # and ex_aws_kms to exactly 2.5.0 (the lower bounds of the default
+  # ranges, which resolve together on hackney 1.x) so the workflow can
+  # run this project's own suite at the floors. The default requirements
+  # are unchanged. Running `mix deps.get` with it set rewrites the stack
+  # in mix.lock - do not commit a lock produced that way.
   defp aws_kms_deps do
     cond do
       System.get_env("NO_AWS_DEPS") ->
         []
+
+      System.get_env("KMS_FLOORS") ->
+        [
+          {:ex_aws, "== 2.6.0", optional: true},
+          {:ex_aws_kms, "== 2.5.0", optional: true},
+          {:hackney, "~> 1.21", optional: true},
+          {:sweet_xml, "~> 0.7", optional: true}
+        ]
 
       System.get_env("HACKNEY_1X") ->
         [
