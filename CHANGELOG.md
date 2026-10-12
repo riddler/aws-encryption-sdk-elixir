@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-12
+
 ### Fixed
 - Fixes signing on suite 0x0214 (AES_128_GCM_IV12_TAG16_HKDF_SHA256_ECDSA_P256):
   a message written on it now carries a P-256 verification key and a
@@ -323,7 +325,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.0...v1.0.1
