@@ -62,6 +62,8 @@ defmodule AwsEncryptionSdk.Crypto.HeaderAuthTest do
   end
 
   test "the deprecated arities are still exported" do
+    {:module, HeaderAuth} = Code.ensure_loaded(HeaderAuth)
+
     for {name, arity} <- [
           compute_header_auth_tag: 2,
           compute_header_auth_tag: 3,
