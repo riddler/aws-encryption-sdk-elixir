@@ -238,3 +238,59 @@ jobs:
       # integration gate excludes them otherwise and says so in the log.
       - name: Run tests on hackney 1.x
         run: HACKNEY_1X=1 mix test --exclude test_vectors
+
+  kms-floors:
+    name: KMS stack at its floors (Elixir 1.18 / OTP 26)
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "26"
+
+      # The default ranges (ex_aws ~> 2.6, ex_aws_kms ~> 2.5) cannot force
+      # their lowest versions, so KMS_FLOORS pins exactly ex_aws 2.6.0
+      # and ex_aws_kms 2.5.0. They resolve together on hackney 1.x, so
+      # hackney and the dependencies it pins are unlocked with them, as
+      # in the hackney 1.x job. See aws_kms_deps/0 in mix.exs.
+      - name: Unlock the KMS stack
+        run: KMS_FLOORS=1 mix deps.unlock hackney ex_aws ex_aws_kms parse_trans idna certifi
+
+      - name: Install dependencies at the floors
+        run: |
+          KMS_FLOORS=1 mix deps.get
+          grep -E '^  "(hackney|ex_aws|ex_aws_kms)":' mix.lock | cut -d, -f1-3
+
+      - name: Compile at the floors
+        run: KMS_FLOORS=1 MIX_ENV=test mix compile --warnings-as-errors
+
+      - name: Cache test vectors
+        uses: actions/cache@v4
+        with:
+          path: test/fixtures/test_vectors
+          key: test-vectors-${{ env.TEST_VECTORS_SHA }}
+
+      - name: Setup test vectors
+        run: |
+          dir=test/fixtures/test_vectors
+          if [ "$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)" != "$TEST_VECTORS_SHA" ]; then
+            rm -rf "$dir"
+            git init -q "$dir"
+            git -C "$dir" fetch -q --depth 1 https://github.com/awslabs/aws-encryption-sdk-test-vectors.git "$TEST_VECTORS_SHA"
+            git -C "$dir" checkout -q FETCH_HEAD
+            cd "$dir/vectors/awses-decrypt"
+            unzip -q python-2.3.0.zip
+          fi
+
+      # KMS integration tests run when the secrets are present; the
+      # integration gate excludes them otherwise and says so in the log.
+      - name: Run tests at the floors
+        run: KMS_FLOORS=1 mix test
