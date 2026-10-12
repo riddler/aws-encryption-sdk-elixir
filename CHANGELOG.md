@@ -20,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of reach at the default frame length (about 16 TiB of plaintext); a
   1-byte frame length reaches it at 4 GiB.
 
+### Deprecated
+- Deprecates `AwsEncryptionSdk.Crypto.HeaderAuth.compute_header_auth_tag/2`
+  and `/3` and `verify_header_auth_tag/2` and `/3`, which took the
+  required pairs from the header's stored encryption context, where
+  messages written by 1.1.0 and later no longer keep them. Use the
+  `/4` arity, which takes the full encryption context and the required
+  keys. The arities are kept, not removed; removal waits for a major
+  release. Answers do not change. The decrypt result's
+  `:encryption_context` is documented as the stored context: required
+  pairs are the ones the caller reproduced.
+
 ### Fixed
 - Refuses a decrypt through a Caching CMM over the required encryption
   context CMM that omits a required key with
