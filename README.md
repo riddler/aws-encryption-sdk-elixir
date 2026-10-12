@@ -81,7 +81,8 @@ end
 The range admits hosts already on hackney 1.x (with ex_aws 2.6), which
 carries the advisories listed in the CHANGELOG; the SDK's KMS requests
 use none of the affected options, and hackney 4.x (with ex_aws 2.7)
-stays recommended.
+stays recommended. Of those advisories, only GHSA-gp9c-pm5m-5cxr
+concerns SOCKS5; the SDK configures no SOCKS5 proxy.
 
 Without them the KMS-backed client module is simply not compiled;
 everything else works unchanged.
