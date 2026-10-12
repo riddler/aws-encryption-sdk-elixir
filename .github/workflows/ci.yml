@@ -218,10 +218,11 @@ jobs:
       # The SDK's own suite on the same pair. Three of hackney's
       # dependencies are locked at versions hackney 1.x refuses, so they
       # are unlocked with it: parse_trans (1.x pins exactly 3.4.1), idna
-      # (1.x wants ~> 6.1.0) and certifi (1.x wants ~> 2.15.0). The locked
-      # mimerl and ssl_verify_fun already satisfy 1.x and stay as locked;
-      # packages only 1.x needs are added by deps.get. See aws_kms_deps/0
-      # in mix.exs.
+      # (1.x wants ~> 6.1.0) and certifi (hackney 1.24 and later want
+      # ~> 2.15.0, earlier 1.x ~> 2.14.0). The locked mimerl and
+      # ssl_verify_fun already satisfy 1.x and stay as locked; packages
+      # only 1.x needs are added by deps.get. See aws_kms_deps/0 in
+      # mix.exs.
       - name: Unlock the hackney stack
         run: HACKNEY_1X=1 mix deps.unlock hackney ex_aws parse_trans idna certifi
 
