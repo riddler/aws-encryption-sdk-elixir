@@ -133,20 +133,44 @@ jobs:
           fi
 
       # Assumes the test role on a push, or on a pull request from a
-      # branch of this repository, never for Dependabot. The action hands
+      # branch of this repository, never for Dependabot. The step hands
       # the later steps temporary credentials, session token included.
-      - name: Configure AWS credentials
+      # It is a plain STS call rather than an action so that nothing
+      # about the role is logged: it selects only the credentials from
+      # the response, masks each value before exporting it, discards the
+      # CLI's error text and prints a fixed line on a failure.
+      - name: Assume the CI role
         id: aws
         if: >-
           env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
           (github.event_name == 'push' ||
           (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository))
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          mask-aws-account-id: true
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
+            || { echo "::error::could not obtain the OIDC token"; exit 1; }
+          token=$(jq -r .value <<<"$resp")
+          echo "::add-mask::${token}"
+          creds=$(aws sts assume-role-with-web-identity \
+            --region us-east-1 \
+            --role-arn "$ROLE_ARN" --role-session-name ci \
+            --web-identity-token "$token" --duration-seconds 3600 \
+            --query Credentials --output json 2>/dev/null) \
+            || { echo "::error::the role assumption was refused"; exit 1; }
+          ak=$(jq -r .AccessKeyId <<<"$creds")
+          sk=$(jq -r .SecretAccessKey <<<"$creds")
+          st=$(jq -r .SessionToken <<<"$creds")
+          echo "::add-mask::${ak}"; echo "::add-mask::${sk}"; echo "::add-mask::${st}"
+          {
+            echo "AWS_ACCESS_KEY_ID=${ak}"
+            echo "AWS_SECRET_ACCESS_KEY=${sk}"
+            echo "AWS_SESSION_TOKEN=${st}"
+            echo "AWS_REGION=us-east-1"
+          } >> "$GITHUB_ENV"
 
       # KMS_KEY_ARN is set only when the role was assumed. Otherwise it is
       # empty and the integration gate excludes the KMS tests, saying so.
@@ -266,18 +290,38 @@ jobs:
         run: HACKNEY_1X=1 MIX_ENV=test mix compile --warnings-as-errors
 
       # As in the quality job: the same event gate and the same role.
-      - name: Configure AWS credentials
+      - name: Assume the CI role
         id: aws
         if: >-
           env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
           (github.event_name == 'push' ||
           (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository))
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          mask-aws-account-id: true
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
+            || { echo "::error::could not obtain the OIDC token"; exit 1; }
+          token=$(jq -r .value <<<"$resp")
+          echo "::add-mask::${token}"
+          creds=$(aws sts assume-role-with-web-identity \
+            --region us-east-1 \
+            --role-arn "$ROLE_ARN" --role-session-name ci \
+            --web-identity-token "$token" --duration-seconds 3600 \
+            --query Credentials --output json 2>/dev/null) \
+            || { echo "::error::the role assumption was refused"; exit 1; }
+          ak=$(jq -r .AccessKeyId <<<"$creds")
+          sk=$(jq -r .SecretAccessKey <<<"$creds")
+          st=$(jq -r .SessionToken <<<"$creds")
+          echo "::add-mask::${ak}"; echo "::add-mask::${sk}"; echo "::add-mask::${st}"
+          {
+            echo "AWS_ACCESS_KEY_ID=${ak}"
+            echo "AWS_SECRET_ACCESS_KEY=${sk}"
+            echo "AWS_SESSION_TOKEN=${st}"
+            echo "AWS_REGION=us-east-1"
+          } >> "$GITHUB_ENV"
 
       # KMS integration tests run when the role was assumed; KMS_KEY_ARN
       # is empty otherwise, and the integration gate excludes them and
@@ -341,18 +385,38 @@ jobs:
           fi
 
       # As in the quality job: the same event gate and the same role.
-      - name: Configure AWS credentials
+      - name: Assume the CI role
         id: aws
         if: >-
           env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
           (github.event_name == 'push' ||
           (github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository))
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          mask-aws-account-id: true
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
+            || { echo "::error::could not obtain the OIDC token"; exit 1; }
+          token=$(jq -r .value <<<"$resp")
+          echo "::add-mask::${token}"
+          creds=$(aws sts assume-role-with-web-identity \
+            --region us-east-1 \
+            --role-arn "$ROLE_ARN" --role-session-name ci \
+            --web-identity-token "$token" --duration-seconds 3600 \
+            --query Credentials --output json 2>/dev/null) \
+            || { echo "::error::the role assumption was refused"; exit 1; }
+          ak=$(jq -r .AccessKeyId <<<"$creds")
+          sk=$(jq -r .SecretAccessKey <<<"$creds")
+          st=$(jq -r .SessionToken <<<"$creds")
+          echo "::add-mask::${ak}"; echo "::add-mask::${sk}"; echo "::add-mask::${st}"
+          {
+            echo "AWS_ACCESS_KEY_ID=${ak}"
+            echo "AWS_SECRET_ACCESS_KEY=${sk}"
+            echo "AWS_SESSION_TOKEN=${st}"
+            echo "AWS_REGION=us-east-1"
+          } >> "$GITHUB_ENV"
 
       # KMS integration tests run when the role was assumed; KMS_KEY_ARN
       # is empty otherwise, and the integration gate excludes them and

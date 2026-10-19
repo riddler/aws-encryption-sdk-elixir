@@ -138,18 +138,38 @@ jobs:
             unzip -q python-2.3.0.zip
           fi
 
-      # The same test role the CI quality cell assumes, on the same event
-      # gate (a tag push is a push).
-      - name: Configure AWS credentials
+      # The same test role the CI quality cell assumes, with the same
+      # silent STS step, on the same event gate (a tag push is a push).
+      - name: Assume the CI role
         id: aws
         if: >-
           env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
           github.event_name == 'push'
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-          mask-aws-account-id: true
+        env:
+          ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
+            || { echo "::error::could not obtain the OIDC token"; exit 1; }
+          token=$(jq -r .value <<<"$resp")
+          echo "::add-mask::${token}"
+          creds=$(aws sts assume-role-with-web-identity \
+            --region us-east-1 \
+            --role-arn "$ROLE_ARN" --role-session-name ci \
+            --web-identity-token "$token" --duration-seconds 3600 \
+            --query Credentials --output json 2>/dev/null) \
+            || { echo "::error::the role assumption was refused"; exit 1; }
+          ak=$(jq -r .AccessKeyId <<<"$creds")
+          sk=$(jq -r .SecretAccessKey <<<"$creds")
+          st=$(jq -r .SessionToken <<<"$creds")
+          echo "::add-mask::${ak}"; echo "::add-mask::${sk}"; echo "::add-mask::${st}"
+          {
+            echo "AWS_ACCESS_KEY_ID=${ak}"
+            echo "AWS_SECRET_ACCESS_KEY=${sk}"
+            echo "AWS_SESSION_TOKEN=${st}"
+            echo "AWS_REGION=us-east-1"
+          } >> "$GITHUB_ENV"
 
       # The gate is the CI quality cell's: `mix quality` in the test
       # environment with the same AWS settings, so the KMS integration tests
