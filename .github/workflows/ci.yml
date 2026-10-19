@@ -136,8 +136,10 @@ jobs:
       # branch of this repository, never for Dependabot. The step hands
       # the later steps temporary credentials, session token included.
       # It is a plain STS call rather than an action so that nothing
-      # about the role is logged: it selects only the credentials from
-      # the response, masks each value before exporting it, discards the
+      # about the role is logged: it first masks the account id and the
+      # role name taken from the role ARN (a KMS refusal in a later test
+      # names the assumed role), selects only the credentials from the
+      # response, masks each value before exporting it, discards the
       # CLI's error text and prints a fixed line on a failure.
       - name: Assume the CI role
         id: aws
@@ -150,6 +152,8 @@ jobs:
           ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
         run: |
           set -euo pipefail
+          acct=$(cut -d: -f5 <<<"$ROLE_ARN"); role=${ROLE_ARN##*/}
+          echo "::add-mask::${acct}"; echo "::add-mask::${role}"
           resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
             || { echo "::error::could not obtain the OIDC token"; exit 1; }
@@ -301,6 +305,8 @@ jobs:
           ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
         run: |
           set -euo pipefail
+          acct=$(cut -d: -f5 <<<"$ROLE_ARN"); role=${ROLE_ARN##*/}
+          echo "::add-mask::${acct}"; echo "::add-mask::${role}"
           resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
             || { echo "::error::could not obtain the OIDC token"; exit 1; }
@@ -396,6 +402,8 @@ jobs:
           ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
         run: |
           set -euo pipefail
+          acct=$(cut -d: -f5 <<<"$ROLE_ARN"); role=${ROLE_ARN##*/}
+          echo "::add-mask::${acct}"; echo "::add-mask::${role}"
           resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com") \
             || { echo "::error::could not obtain the OIDC token"; exit 1; }
