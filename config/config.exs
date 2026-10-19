@@ -4,10 +4,12 @@ import Config
 # These settings can be overridden with environment variables:
 # - AWS_ACCESS_KEY_ID
 # - AWS_SECRET_ACCESS_KEY
+# - AWS_SESSION_TOKEN (temporary credentials, such as an assumed role's)
 # - AWS_REGION (defaults to us-east-1)
 config :ex_aws,
   access_key_id: [{:system, "AWS_ACCESS_KEY_ID"}, :instance_role],
   secret_access_key: [{:system, "AWS_SECRET_ACCESS_KEY"}, :instance_role],
+  security_token: [{:system, "AWS_SESSION_TOKEN"}, :instance_role],
   region: System.get_env("AWS_REGION", "us-east-1")
 
 # HTTP client configuration for ExAws

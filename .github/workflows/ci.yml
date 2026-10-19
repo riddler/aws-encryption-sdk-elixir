@@ -46,11 +46,18 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
 
+    # The KMS integration tests assume an AWS role with this job's OIDC
+    # token, so the job may request one.
+    permissions:
+      id-token: write
+      contents: read
+
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
       AWS_REGION: us-east-1
+      # True only when the role secret reaches this run. A pull request
+      # from a fork and a Dependabot run receive no secrets, so it reads
+      # false there and the credential step is skipped.
+      HAS_AWS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
 
     strategy:
       fail-fast: false
@@ -125,11 +132,33 @@ jobs:
             unzip -q python-2.3.0.zip
           fi
 
+      # Assumes the test role on a push, or on a pull request from a
+      # branch of this repository, never for Dependabot. The action hands
+      # the later steps temporary credentials, session token included.
+      - name: Configure AWS credentials
+        id: aws
+        if: >-
+          env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository))
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      # KMS_KEY_ARN is set only when the role was assumed. Otherwise it is
+      # empty and the integration gate excludes the KMS tests, saying so.
       - name: Run quality checks
+        env:
+          KMS_KEY_ARN: ${{ steps.aws.outcome == 'success' && secrets.KMS_KEY_ARN || '' }}
         run: mix quality
 
       - name: Generate coverage report
         if: matrix.coverage
+        env:
+          KMS_KEY_ARN: ${{ steps.aws.outcome == 'success' && secrets.KMS_KEY_ARN || '' }}
         run: mix coveralls.json
 
       - name: Upload coverage to Codecov
@@ -187,11 +216,13 @@ jobs:
   hackney-1x:
     name: Host on hackney 1.x (Elixir 1.18 / OTP 26)
     runs-on: ubuntu-latest
+    # As in the quality job: the role is assumed with the OIDC token.
+    permissions:
+      id-token: write
+      contents: read
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
       AWS_REGION: us-east-1
+      HAS_AWS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -234,19 +265,38 @@ jobs:
       - name: Compile on hackney 1.x
         run: HACKNEY_1X=1 MIX_ENV=test mix compile --warnings-as-errors
 
-      # KMS integration tests run when the secrets are present; the
-      # integration gate excludes them otherwise and says so in the log.
+      # As in the quality job: the same event gate and the same role.
+      - name: Configure AWS credentials
+        id: aws
+        if: >-
+          env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository))
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      # KMS integration tests run when the role was assumed; KMS_KEY_ARN
+      # is empty otherwise, and the integration gate excludes them and
+      # says so in the log.
       - name: Run tests on hackney 1.x
+        env:
+          KMS_KEY_ARN: ${{ steps.aws.outcome == 'success' && secrets.KMS_KEY_ARN || '' }}
         run: HACKNEY_1X=1 mix test --exclude test_vectors
 
   kms-floors:
     name: KMS stack at its floors (Elixir 1.18 / OTP 26)
     runs-on: ubuntu-latest
+    # As in the quality job: the role is assumed with the OIDC token.
+    permissions:
+      id-token: write
+      contents: read
     env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      KMS_KEY_ARN: ${{ secrets.KMS_KEY_ARN }}
       AWS_REGION: us-east-1
+      HAS_AWS_ROLE: ${{ secrets.AWS_ROLE_ARN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -290,7 +340,24 @@ jobs:
             unzip -q python-2.3.0.zip
           fi
 
-      # KMS integration tests run when the secrets are present; the
-      # integration gate excludes them otherwise and says so in the log.
+      # As in the quality job: the same event gate and the same role.
+      - name: Configure AWS credentials
+        id: aws
+        if: >-
+          env.HAS_AWS_ROLE == 'true' && github.actor != 'dependabot[bot]' &&
+          (github.event_name == 'push' ||
+          (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository))
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      # KMS integration tests run when the role was assumed; KMS_KEY_ARN
+      # is empty otherwise, and the integration gate excludes them and
+      # says so in the log.
       - name: Run tests at the floors
+        env:
+          KMS_KEY_ARN: ${{ steps.aws.outcome == 'success' && secrets.KMS_KEY_ARN || '' }}
         run: KMS_FLOORS=1 mix test
