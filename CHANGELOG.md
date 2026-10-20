@@ -34,6 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses a declared length above the format's limit (2^36 - 32 bytes)
   with `{:error, :content_too_large}`. Framed messages are read as
   before.
+- Fixes `AwsEncryptionSdk.Crypto.ECDSA.verify/4` raising on a public key
+  that is not a point on the curve: it now answers `false`, as the
+  one-shot and streaming decrypts already do. Before, `:crypto` raised an
+  ErlangError.
+- Fixes encrypting a signed suite with a caller-assembled signing key on
+  the other curve: `AwsEncryptionSdk.Encrypt.encrypt/3` (and
+  `AwsEncryptionSdk.encrypt/3` and `encrypt_with_materials/3` with
+  materials) and `AwsEncryptionSdk.Stream.Encryptor.init/2` now raise an
+  `ArgumentError` naming the suite, the curve it signs on and the key's
+  size, before anything is encrypted. Before, a P-384 key on 0x0214
+  raised an ErlangError from `:crypto` once the body was encrypted, and a
+  P-256 key on 0x0346, 0x0378 or 0x0578 signed without complaint, its
+  32 bytes read as a P-384 scalar. The Default CMM generates the signing
+  key on the suite's curve, so a client that encrypts through a CMM sees
+  no change.
 
 ## [1.2.1] - 2026-10-12
 

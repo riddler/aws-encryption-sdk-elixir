@@ -52,6 +52,16 @@ defmodule AwsEncryptionSdk.Encrypt do
     2^32 - 1 frames of `:frame_length` bytes, the specification's limit for
     one message; nothing is encrypted
   - `{:error, reason}` - Encryption failed
+
+  ## Raises
+
+  - `ArgumentError` - The suite is signed and the materials' `:signing_key`
+    is not a private key for the curve the suite signs on (P-256 for
+    0x0214, P-384 for 0x0346, 0x0378 and 0x0578): it has the size of a
+    private key on the other curve. The message names the suite, its curve
+    and the key's size; nothing is encrypted. The Default CMM generates the
+    signing key on the suite's curve, so this is reached only through
+    materials a caller assembles and passes here.
   """
   @spec encrypt(EncryptionMaterials.t(), binary(), encrypt_opts()) ::
           {:ok, encrypt_result()} | {:error, term()}
@@ -63,6 +73,7 @@ defmodule AwsEncryptionSdk.Encrypt do
     # legitimately added reserved keys (e.g., aws-crypto-public-key for signed suites).
     # User-provided context validation should happen at the Client/CMM layer.
     with :ok <- validate_algorithm_suite(materials.algorithm_suite),
+         :ok <- ECDSA.check_signing_key!(materials.algorithm_suite, materials.signing_key),
          :ok <- check_frame_count(plaintext, frame_length),
          {:ok, message_id} <- generate_message_id(materials.algorithm_suite),
          {:ok, derived_key, commitment_key} <- derive_keys(materials, message_id),

@@ -67,6 +67,7 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
 
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Crypto.AesGcm
+  alias AwsEncryptionSdk.Crypto.ECDSA
   alias AwsEncryptionSdk.Crypto.HeaderAuth
   alias AwsEncryptionSdk.Crypto.HKDF
   alias AwsEncryptionSdk.Format.Body
@@ -107,6 +108,14 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
   ## Options
 
   - `:frame_length` - Frame size in bytes (default: 4096)
+
+  ## Raises
+
+  - `ArgumentError` - The suite is signed and the materials' `:signing_key`
+    is not a private key for the curve the suite signs on, as
+    `AwsEncryptionSdk.Encrypt.encrypt/3` raises it, before any byte is
+    produced. Reached only through materials a caller assembles; the
+    Default CMM generates the key on the suite's curve.
   """
   @spec init(EncryptionMaterials.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def init(%EncryptionMaterials{} = materials, opts \\ []) do
@@ -114,6 +123,8 @@ defmodule AwsEncryptionSdk.Stream.Encryptor do
     suite = materials.algorithm_suite
 
     if AlgorithmSuite.allows_encryption?(suite) do
+      :ok = ECDSA.check_signing_key!(suite, materials.signing_key)
+
       # Initialize signature accumulator for signed suites
       sig_acc = if AlgorithmSuite.signed?(suite), do: SignatureAccumulator.init(suite), else: nil
 

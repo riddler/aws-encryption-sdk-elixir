@@ -131,5 +131,85 @@ defmodule AwsEncryptionSdk.Crypto.ECDSATest do
 
       refute ECDSA.verify(message, tampered_signature, public_key, :secp384r1)
     end
+
+    # Sabotage: remove the rescue in ECDSA.verify/4 -> each case raises
+    # ErlangError from :crypto instead of answering false.
+    test "answers false for a public key that is not a point on the curve" do
+      {private_key, _public_key} = ECDSA.generate_key_pair(:secp256r1)
+      {_p384_private_key, p384_public_key} = ECDSA.generate_key_pair(:secp384r1)
+      message = "test message"
+      signature = ECDSA.sign(message, private_key, :secp256r1)
+
+      # (1, 2) does not satisfy the P-256 curve equation
+      off_curve = <<0x04, 1::256, 2::256>>
+
+      # A raise becomes a value here, so that it fails the assertion
+      answer = fn key, curve ->
+        try do
+          ECDSA.verify(message, signature, key, curve)
+        rescue
+          error -> {:raised, error.__struct__}
+        end
+      end
+
+      assert answer.(off_curve, :secp256r1) == false
+      assert answer.(p384_public_key, :secp256r1) == false
+      assert answer.(<<1, 2, 3>>, :secp384r1) == false
+    end
+  end
+
+  describe "check_signing_key!/2" do
+    alias AwsEncryptionSdk.AlgorithmSuite
+
+    # A raise becomes a value, so that it fails the assertion
+    defp check(suite, key) do
+      ECDSA.check_signing_key!(suite, key)
+    rescue
+      error -> {:raised, error.__struct__}
+    end
+
+    # Sabotage: in check_signing_key!/2, drop the `other != curve` condition
+    # -> each signed suite's own key raises.
+    test "accepts a private key on the suite's curve, and no key" do
+      p256_suite = AlgorithmSuite.aes_128_gcm_iv12_tag16_hkdf_sha256_ecdsa_p256()
+      p384_suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key_ecdsa_p384()
+      {p256_key, _public_key} = ECDSA.generate_key_pair(:secp256r1)
+      {p384_key, _public_key} = ECDSA.generate_key_pair(:secp384r1)
+
+      assert :ok == check(p256_suite, p256_key)
+      assert :ok == check(p384_suite, p384_key)
+      assert :ok == check(p384_suite, nil)
+    end
+
+    test "accepts any key on an unsigned suite, which signs nothing" do
+      unsigned = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+      {p256_key, _public_key} = ECDSA.generate_key_pair(:secp256r1)
+
+      assert :ok == ECDSA.check_signing_key!(unsigned, p256_key)
+    end
+
+    # A key of neither curve's size is left to :crypto, as before.
+    test "accepts a key of neither curve's size" do
+      p384_suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key_ecdsa_p384()
+
+      assert :ok == ECDSA.check_signing_key!(p384_suite, :crypto.strong_rand_bytes(47))
+    end
+
+    test "raises naming the suite, its curve and the key's size" do
+      p256_suite = AlgorithmSuite.aes_128_gcm_iv12_tag16_hkdf_sha256_ecdsa_p256()
+      p384_suite = AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key_ecdsa_p384()
+      {p256_key, _public_key} = ECDSA.generate_key_pair(:secp256r1)
+      {p384_key, _public_key} = ECDSA.generate_key_pair(:secp384r1)
+
+      assert_raise ArgumentError,
+                   "the signing key is not a secp256r1 private key, the curve algorithm " <>
+                     "suite 0x0214 signs on: it is 48 bytes, the size of a secp384r1 private key",
+                   fn -> ECDSA.check_signing_key!(p256_suite, p384_key) end
+
+      assert_raise ArgumentError,
+                   "the signing key is not a secp384r1 private key, the curve algorithm " <>
+                     "suite 0x0578 signs on: it is 32 bytes, the size of a secp256r1 private key",
+                   fn -> ECDSA.check_signing_key!(p384_suite, p256_key) end
+    end
   end
 end
