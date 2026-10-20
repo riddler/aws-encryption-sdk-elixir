@@ -24,6 +24,19 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
   Memory usage is bounded by the frame size plus header size, regardless of
   total message size.
 
+  ### Non-Framed Messages
+
+  A non-framed message (content type `0x01`, which other SDKs may write) has
+  one body: an IV, an 8-byte content length, the ciphertext and one
+  authentication tag over all of it. That tag cannot be checked until the
+  whole body has arrived, so the decryptor buffers the body and releases the
+  plaintext whole, in one piece, only after the tag verifies (and, on a
+  signed suite, only after the footer's signature verifies, as a framed
+  message's final frame is held). The buffer is bounded by the content length
+  the body declares; a declared length above the format's limit of 2^36 - 32
+  bytes is refused with `{:error, :content_too_large}` before the body is
+  buffered.
+
   ## Plaintext Verification Status
 
   Decrypted plaintext is tagged with verification status:
@@ -81,7 +94,7 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
   1. `:init` - Not started, awaiting ciphertext
   2. `:reading_header` - Accumulating header bytes
-  3. `:decrypting` - Processing frames
+  3. `:decrypting` - Processing frames, or a non-framed body
   4. `:reading_footer` - Accumulating footer (signed suites only)
   5. `:done` - Decryption complete
 
@@ -196,6 +209,8 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
   or final frame after signature verification, `:unverified` otherwise.
 
   For unsigned suites, plaintext is released immediately after frame authentication.
+  A non-framed body is released whole once its tag (and, on a signed suite, the
+  footer's signature) verifies.
   """
   @spec update(t(), binary()) ::
           {:ok, t(), [{binary(), plaintext_status()}]} | {:error, term()}
@@ -271,6 +286,24 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
       # All other errors during header parsing are treated as incomplete data
       # This is safe in streaming context - we just need more bytes
       {:error, _reason} ->
+        {:ok, dec, Enum.reverse(acc)}
+    end
+  end
+
+  defp process_buffer(%{state: :decrypting, header: %{content_type: :non_framed}} = dec, acc) do
+    case Body.deserialize_non_framed(dec.buffer) do
+      {:ok, body, rest} ->
+        process_non_framed_body(dec, acc, body, rest)
+
+      {:error, :content_too_large} = error ->
+        error
+
+      # The IV and content length, or the declared content and its tag, have
+      # not all arrived yet - need more bytes
+      {:error, :invalid_non_framed_body} ->
+        {:ok, dec, Enum.reverse(acc)}
+
+      {:error, :incomplete_non_framed_body} ->
         {:ok, dec, Enum.reverse(acc)}
     end
   end
@@ -368,6 +401,15 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
         handle_decrypted_frame(dec, acc, plaintext, rest, sig_acc, is_final)
       end
+    end
+  end
+
+  # A non-framed body is the message's only content: once its tag verifies it
+  # is handled as a final frame is (held for the signature on a signed suite)
+  defp process_non_framed_body(dec, acc, body, rest) do
+    with {:ok, plaintext} <- decrypt_non_framed_body(body, dec) do
+      sig_acc = update_signature_accumulator(dec, rest)
+      handle_decrypted_frame(dec, acc, plaintext, rest, sig_acc, true)
     end
   end
 
@@ -479,6 +521,23 @@ defmodule AwsEncryptionSdk.Stream.Decryptor do
 
   defp verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys) do
     HeaderAuth.verify_header_auth_tag(header, derived_key, full_ec, required_ec_keys)
+  end
+
+  # The same AAD and refusal as the one-shot decrypt's non-framed body
+  defp decrypt_non_framed_body(body, dec) do
+    aad = BodyAad.serialize(dec.header.message_id, :non_framed, 1, byte_size(body.ciphertext))
+
+    case AesGcm.decrypt(
+           dec.header.algorithm_suite.encryption_algorithm,
+           dec.derived_key,
+           body.iv,
+           body.ciphertext,
+           aad,
+           body.auth_tag
+         ) do
+      {:ok, plaintext} -> {:ok, plaintext}
+      {:error, :authentication_failed} -> {:error, :body_authentication_failed}
+    end
   end
 
   defp decrypt_frame(frame, dec) do
