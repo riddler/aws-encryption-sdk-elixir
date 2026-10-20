@@ -141,7 +141,12 @@ defmodule AwsEncryptionSdk.Stream.CmmDispatchTest do
       # No length declared, so nothing was ever cached. The cache id is
       # derived from the request's context (before the CMM adds the signing
       # public key), so this probes exactly where an entry would have landed.
-      cache_id = Caching.compute_encryption_cache_id("stream-partition", nil, ec)
+      cache_id =
+        Caching.encryption_cache_id(cmm, %{
+          encryption_context: ec,
+          commitment_policy: client.commitment_policy
+        })
+
       assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache, cache_id)
     end
 
@@ -177,7 +182,11 @@ defmodule AwsEncryptionSdk.Stream.CmmDispatchTest do
       [header1, header2] = headers
       assert header1.encrypted_data_keys == header2.encrypted_data_keys
 
-      cache_id = Caching.compute_encryption_cache_id("stream-partition", nil, ec)
+      cache_id =
+        Caching.encryption_cache_id(cmm, %{
+          encryption_context: ec,
+          commitment_policy: client.commitment_policy
+        })
 
       {:ok, entry} = LocalCache.get_cache_entry(cache, cache_id)
       assert entry.messages_used == 2

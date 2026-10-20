@@ -3,8 +3,11 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
 
   alias AwsEncryptionSdk.AlgorithmSuite
   alias AwsEncryptionSdk.Cache.LocalCache
+  alias AwsEncryptionSdk.Client
   alias AwsEncryptionSdk.Cmm.{Caching, Default, RequiredEncryptionContext}
+  alias AwsEncryptionSdk.Format.Header
   alias AwsEncryptionSdk.Keyring.RawAes
+  alias AwsEncryptionSdk.Stream
 
   defp create_test_keyring do
     key = :crypto.strong_rand_bytes(32)
@@ -26,6 +29,21 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
     }
 
     {cmm, request}
+  end
+
+  defp encrypt_request(context, policy) do
+    %{encryption_context: context, commitment_policy: policy, max_plaintext_length: 0}
+  end
+
+  defp header_suite(ciphertext) do
+    {:ok, header, _rest} = Header.deserialize(ciphertext)
+    header.algorithm_suite
+  end
+
+  defp stream_encrypt(client, plaintext, context) do
+    [plaintext]
+    |> Stream.encrypt(client, encryption_context: context, plaintext_length: byte_size(plaintext))
+    |> Enum.join()
   end
 
   describe "new/3" do
@@ -297,7 +315,7 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       assert materials1.plaintext_data_key != materials2.plaintext_data_key
 
       # Nothing was stored either
-      cache_id = Caching.compute_encryption_cache_id("bypass-partition", suite, context)
+      cache_id = Caching.encryption_cache_id(cmm, request)
       assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache, cache_id)
     end
 
@@ -436,8 +454,8 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       # The bypassed request propagates through the nesting untouched
       assert materials1.plaintext_data_key != materials2.plaintext_data_key
 
-      inner_id = Caching.compute_encryption_cache_id("inner-part", suite, context)
-      outer_id = Caching.compute_encryption_cache_id("outer-part", suite, context)
+      inner_id = Caching.encryption_cache_id(inner_cmm, request)
+      outer_id = Caching.encryption_cache_id(outer_cmm, request)
       assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache1, inner_id)
       assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache2, outer_id)
     end
@@ -599,6 +617,144 @@ defmodule AwsEncryptionSdk.Cmm.CachingTest do
       id2 = Caching.compute_decryption_cache_id(partition_id, suite, [edk2, edk1], context)
 
       assert id1 == id2
+    end
+  end
+
+  describe "cache identity" do
+    setup do
+      {:ok, cache} = LocalCache.start_link([])
+      partition_id = :crypto.strong_rand_bytes(16)
+
+      on_partition = fn underlying ->
+        Caching.new(underlying, cache, max_age: 300, partition_id: partition_id)
+      end
+
+      {:ok, on_partition: on_partition, context: %{"tenant" => "acme", "purpose" => "test"}}
+    end
+
+    # Each second CMM below holds a keyring with another key, so a data key
+    # equal to the first one's can only come from the shared entry.
+    test "identically configured Caching CMMs still share entries", ctx do
+      configurations = [
+        &Default.new/1,
+        &RequiredEncryptionContext.new_with_keyring(["tenant"], &1),
+        &Caching.new(Default.new(&1), elem(LocalCache.start_link([]), 1), max_age: 300)
+      ]
+
+      for {configure, round} <- Enum.with_index(configurations) do
+        first = ctx.on_partition.(configure.(create_test_keyring()))
+        second = ctx.on_partition.(configure.(create_test_keyring()))
+        context = Map.put(ctx.context, "round", Integer.to_string(round))
+        request = encrypt_request(context, :require_encrypt_require_decrypt)
+
+        {:ok, materials1} = Caching.get_encryption_materials(first, request)
+        {:ok, materials2} = Caching.get_encryption_materials(second, request)
+
+        assert materials1.plaintext_data_key == materials2.plaintext_data_key
+
+        assert Caching.encryption_cache_id(first, request) ==
+                 Caching.encryption_cache_id(second, request)
+      end
+    end
+
+    # Sabotage: leaving the underlying CMM chain out of the cache identity
+    # turns this test red: the required-context side is served the default
+    # side's entry, which carries no required keys.
+    test "a differently configured underlying CMM misses and refetches", ctx do
+      keyring = create_test_keyring()
+      default_side = ctx.on_partition.(Default.new(keyring))
+
+      required_side =
+        ctx.on_partition.(RequiredEncryptionContext.new_with_keyring(["tenant"], keyring))
+
+      request = encrypt_request(ctx.context, :require_encrypt_require_decrypt)
+
+      {:ok, default_materials} = Caching.get_encryption_materials(default_side, request)
+      {:ok, required_materials} = Caching.get_encryption_materials(required_side, request)
+
+      assert default_materials.required_encryption_context_keys == []
+      assert required_materials.required_encryption_context_keys == ["tenant"]
+      assert required_materials.plaintext_data_key != default_materials.plaintext_data_key
+    end
+
+    # Sabotage: leaving the request's required keys out of the cache
+    # identity turns this test red: the required-context CMM wrapping the
+    # shared Caching CMM is served the bare client's entry and refuses it
+    # with {:required_keys_not_in_materials, ["tenant"]}.
+    test "a required-context CMM wrapping a shared Caching CMM answers as a cold read", ctx do
+      keyring = create_test_keyring()
+      shared = ctx.on_partition.(Default.new(keyring))
+      plaintext = "plaintext"
+
+      assert {:ok, _bare} =
+               Client.encrypt(Client.new(shared), plaintext, encryption_context: ctx.context)
+
+      cold_cmm =
+        Caching.new(Default.new(keyring), elem(LocalCache.start_link([]), 1), max_age: 300)
+
+      for cmm <- [cold_cmm, shared] do
+        wrapped = Client.new(RequiredEncryptionContext.new(["tenant"], cmm))
+
+        assert {:ok, result} = Client.encrypt(wrapped, plaintext, encryption_context: ctx.context)
+        refute Map.has_key?(result.header.encryption_context, "tenant")
+      end
+    end
+
+    # Sabotage: leaving the request's commitment policy out of the cache
+    # identity turns this test red: the default-policy encrypt is served
+    # the permissive client's 0x0378 entry, and Client.encrypt/3 refuses it
+    # with :commitment_policy_requires_committed_suite.
+    test "a one-shot encrypt under another commitment policy misses and refetches", ctx do
+      cmm = ctx.on_partition.(Default.new(create_test_keyring()))
+      permissive = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+
+      assert {:ok, first} =
+               Client.encrypt(permissive, "plaintext", encryption_context: ctx.context)
+
+      assert first.algorithm_suite.id == 0x0378
+
+      assert {:ok, second} =
+               Client.encrypt(Client.new(cmm), "plaintext", encryption_context: ctx.context)
+
+      assert second.algorithm_suite.id == 0x0578
+    end
+
+    # Sabotage: the same mutation turns this test red: the default-policy
+    # stream writes the permissive client's non-committed 0x0378 entry.
+    test "a stream encrypt under another commitment policy misses and refetches", ctx do
+      cmm = ctx.on_partition.(Default.new(create_test_keyring()))
+      permissive = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+
+      assert header_suite(stream_encrypt(permissive, "plaintext", ctx.context)).id == 0x0378
+      assert header_suite(stream_encrypt(Client.new(cmm), "plaintext", ctx.context)).id == 0x0578
+    end
+
+    # Sabotage: leaving the request's commitment policy out of the
+    # decryption cache identity turns this test red: the default-policy
+    # stream decrypt is served the permissive client's entry and returns
+    # the plaintext of a non-committed message.
+    test "a stream decrypt under another commitment policy answers as a cold read", ctx do
+      keyring = create_test_keyring()
+      cmm = ctx.on_partition.(Default.new(keyring))
+      permissive = Client.new(cmm, commitment_policy: :forbid_encrypt_allow_decrypt)
+
+      {:ok, %{ciphertext: ciphertext}} =
+        Client.encrypt(
+          Client.new(Default.new(keyring), commitment_policy: :forbid_encrypt_allow_decrypt),
+          "plaintext",
+          encryption_context: ctx.context
+        )
+
+      assert {:ok, %{plaintext: "plaintext"}} = Client.decrypt(permissive, ciphertext)
+
+      cold_cmm =
+        Caching.new(Default.new(keyring), elem(LocalCache.start_link([]), 1), max_age: 300)
+
+      for strict <- [Client.new(cold_cmm), Client.new(cmm)] do
+        assert_raise RuntimeError, ~r/commitment_policy_requires_committed_suite/, fn ->
+          [ciphertext] |> Stream.decrypt(strict) |> Enum.to_list()
+        end
+      end
     end
   end
 end

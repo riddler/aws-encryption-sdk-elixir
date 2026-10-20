@@ -453,10 +453,10 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
        nested_required_side: nested}
     end
 
-    # Sabotage: dropping the reading CMM's configured keys from the hit
-    # check (Caching's bound_context_agrees?/3 ignoring its reader_keys
-    # argument) turns this test red: the omitting read is served the
-    # default side's entry and decrypts.
+    # Sabotage: leaving the underlying CMM chain out of the cache identity
+    # (Caching's cmm_chain_identity/1 answering the same term for every
+    # chain) turns this test red: the omitting read is served the default
+    # side's entry and decrypts.
     test "refuses a read omitting a required key with the missing-keys reason, after a default-side read filled the entry",
          ctx do
       # Written without required keys: every pair is stored in the header.
@@ -497,9 +497,10 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
                )
     end
 
-    # Sabotage: resolving no configured keys through a nested Caching CMM
-    # (Caching's reader_required_keys/1 answering [] for it) turns this
-    # test red: the omitting read is served the default side's entry.
+    # Sabotage: not reading the chain through a nested Caching CMM
+    # (Caching's cmm_chain_identity/1 answering the default CMM's term for
+    # it) turns this test red: the omitting read is served the default
+    # side's entry.
     test "reads the required keys through a nested Caching CMM", ctx do
       ciphertext =
         encrypt(
@@ -514,6 +515,56 @@ defmodule AwsEncryptionSdk.RequiredContextStorageTest do
                Client.decrypt(ctx.nested_required_side, ciphertext,
                  encryption_context: Map.delete(@context, "required-a")
                )
+    end
+
+    # A read that reproduces every required key answers as a cold read
+    # through the required-context CMM does, after a default-side read
+    # filled the partition: the two Caching CMMs are configured
+    # differently, so their cache identities differ and the read misses.
+    #
+    # Sabotage: leaving the underlying CMM chain out of the cache identity
+    # (Caching's cmm_chain_identity/1 answering the same term for every chain)
+    # turns this test red: the read is served the default side's entry,
+    # whose required set is empty, and fails header authentication.
+    test "decrypts a message written before 1.1.0 as a cold read does", ctx do
+      ciphertext = fixture(@pre_fix_dir, "required-context-0478.bin")
+
+      assert {:error, :header_authentication_failed} =
+               Client.decrypt(ctx.default_side, ciphertext, encryption_context: %{})
+
+      cold =
+        Client.decrypt(required_client(ctx.keyring), ciphertext, encryption_context: @context)
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} = cold
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.required_side, ciphertext, encryption_context: @context)
+    end
+
+    # Sabotage: the same mutation turns this test red: the read is served
+    # the default side's entry and decrypts a message whose writer stored
+    # every required key, which a cold read refuses.
+    test "refuses a message written without required keys as a cold read does", ctx do
+      # Written without required keys: every pair is stored in the header.
+      ciphertext =
+        encrypt(
+          default_client(ctx.keyring),
+          AlgorithmSuite.aes_256_gcm_hkdf_sha512_commit_key()
+        )
+
+      assert {:ok, %{plaintext: @fixture_plaintext}} =
+               Client.decrypt(ctx.default_side, ciphertext, encryption_context: %{})
+
+      cold =
+        Client.decrypt(required_client(ctx.keyring), ciphertext, encryption_context: @context)
+
+      assert {:error, :header_authentication_failed} = cold
+
+      assert Client.decrypt(ctx.required_side, ciphertext, encryption_context: @context) == cold
+
+      assert_raise RuntimeError, ~r/header_authentication_failed/, fn ->
+        stream_decrypt(ciphertext, ctx.required_side, @context)
+      end
     end
 
     # Sabotage: refusing every hit when the reading CMM configures required

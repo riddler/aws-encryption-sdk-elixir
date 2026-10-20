@@ -117,11 +117,17 @@ defmodule AwsEncryptionSdk.Stream.AlgorithmSuiteTest do
           plaintext_length: 5
         )
 
-      cache_id = Caching.compute_encryption_cache_id("shared", suite, ec)
+      cache_id =
+        Caching.encryption_cache_id(cmm, %{
+          encryption_context: ec,
+          commitment_policy: :forbid_encrypt_allow_decrypt,
+          algorithm_suite: suite
+        })
+
       assert {:ok, %{messages_used: 1}} = LocalCache.get_cache_entry(cache, cache_id)
 
-      # The cached 0x0214 entry would answer the strict client's request; the
-      # check runs first, so the entry is neither served nor counted
+      # The check runs before the CMM is called, so the permitting client's
+      # 0x0214 entry is neither served nor counted
       assert_raise RuntimeError,
                    "Encryption initialization failed: :commitment_policy_requires_committed_suite",
                    fn ->
@@ -162,14 +168,15 @@ defmodule AwsEncryptionSdk.Stream.AlgorithmSuiteTest do
       {:ok, header2, _rest} = Header.deserialize(ciphertext2)
       assert header1.encrypted_data_keys == header2.encrypted_data_keys
 
-      suite_id = Caching.compute_encryption_cache_id("suites", suite, ec)
+      request = %{encryption_context: ec, commitment_policy: :forbid_encrypt_allow_decrypt}
+      suite_id = Caching.encryption_cache_id(cmm, Map.put(request, :algorithm_suite, suite))
       assert {:ok, entry} = LocalCache.get_cache_entry(cache, suite_id)
       assert entry.messages_used == 2
       assert entry.bytes_used == 2 * byte_size(plaintext)
       assert entry.materials.algorithm_suite.id == 0x0214
 
       # Nothing landed under the no-suite entry the stream used before
-      default_id = Caching.compute_encryption_cache_id("suites", nil, ec)
+      default_id = Caching.encryption_cache_id(cmm, request)
       assert {:error, :cache_miss} = LocalCache.get_cache_entry(cache, default_id)
 
       assert stream_decrypt(client, ciphertext2) == plaintext

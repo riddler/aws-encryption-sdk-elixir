@@ -7,7 +7,8 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
 
   - **Performance**: Caches generated data keys and EDKs
   - **Security**: Enforces key rotation via TTL and usage limits
-  - **Sharing**: Multiple Caching CMMs can share cache via Partition IDs
+  - **Sharing**: Multiple Caching CMMs can share cache via Partition IDs,
+    when their materials-shaping configuration matches (see Cache identity)
 
   ## Example
 
@@ -21,6 +22,21 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
       # Or wrap an existing CMM
       default_cmm = Default.new(keyring)
       cmm = Caching.new(default_cmm, cache, max_age: 300)
+
+  ## Cache identity
+
+  A cache entry is shared only by requests that a cold read would answer
+  the same way. The cache key includes the materials-shaping
+  configuration: the partition id; the underlying CMM chain (each CMM's
+  kind, and the keys each `AwsEncryptionSdk.Cmm.RequiredEncryptionContext`
+  in it requires); the request's commitment policy; and, on encrypt, the
+  required encryption context keys the request carries. A differently
+  configured CMM sharing the cache and partition id misses and refetches,
+  so a hit always answers as a cold read would.
+
+  The keyring is not part of the cache key: Caching CMMs that share a cache
+  and a partition id share entries across their keyrings, so share a
+  partition id only between Caching CMMs whose keyrings hold the same keys.
 
   ## Usage limits
 
@@ -157,7 +173,6 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   @impl Behaviour
   def get_encryption_materials(%__MODULE__{} = cmm, request) do
     algorithm_suite = Map.get(request, :algorithm_suite)
-    encryption_context = request.encryption_context
 
     cond do
       # Identity KDF bypass - never cache deprecated suites
@@ -170,29 +185,89 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
         call_underlying_cmm_encrypt(cmm.underlying_cmm, request)
 
       true ->
-        cache_id =
-          compute_encryption_cache_id(cmm.partition_id, algorithm_suite, encryption_context)
-
-        handle_encryption_cache_lookup(cmm, cache_id, request)
+        handle_encryption_cache_lookup(cmm, encryption_cache_id(cmm, request), request)
     end
   end
 
   @impl Behaviour
   def get_decryption_materials(%__MODULE__{} = cmm, request) do
-    algorithm_suite = request.algorithm_suite
-    encryption_context = request.encryption_context
-    edks = request.encrypted_data_keys
-
     # Identity KDF bypass - never cache deprecated suites
-    if identity_kdf?(algorithm_suite) do
+    if identity_kdf?(request.algorithm_suite) do
       call_underlying_cmm_decrypt(cmm.underlying_cmm, request)
     else
-      cache_id =
-        compute_decryption_cache_id(cmm.partition_id, algorithm_suite, edks, encryption_context)
-
-      handle_decryption_cache_lookup(cmm, cache_id, request)
+      handle_decryption_cache_lookup(cmm, decryption_cache_id(cmm, request), request)
     end
   end
+
+  # Cache identity
+  #
+  # The Appendix A formulas below hash a partition id with the request's
+  # suite, encrypted data keys and stored context. Nothing else in a request
+  # or in this CMM's configuration reaches them, yet more than that shapes
+  # the materials a cold read returns:
+  #
+  #   * the underlying CMM chain: each CMM's kind, and each required-context
+  #     CMM's configured keys (it refuses a read without them, and adds them
+  #     to the materials' required set, which shapes the header a message
+  #     is written with and the header-authentication AAD it is read with);
+  #   * the request's commitment policy (with no suite requested, the
+  #     default CMM picks the suite by policy; on decrypt it refuses a suite
+  #     the policy forbids);
+  #   * on encrypt, the required keys the request carries (a required-context
+  #     CMM wrapping this one adds its keys there).
+  #
+  # The keyring is not part of it: Caching CMMs that share a cache and a
+  # partition id share entries across their keyrings (the moduledoc says
+  # so).
+  #
+  # So the partition the formulas hash is derived from the configured
+  # partition id AND that configuration. A Caching CMM configured
+  # differently computes a different cache id, misses, and fetches fresh
+  # materials from its own chain, so a hit answers as a cold read would.
+
+  @doc false
+  @spec encryption_cache_id(t(), map()) :: binary()
+  def encryption_cache_id(%__MODULE__{} = cmm, request) do
+    shape =
+      {:encrypt, Map.get(request, :commitment_policy),
+       Map.get(request, :required_encryption_context_keys) || []}
+
+    compute_encryption_cache_id(
+      effective_partition_id(cmm, shape),
+      Map.get(request, :algorithm_suite),
+      request.encryption_context
+    )
+  end
+
+  @doc false
+  @spec decryption_cache_id(t(), map()) :: binary()
+  def decryption_cache_id(%__MODULE__{} = cmm, request) do
+    shape = {:decrypt, Map.get(request, :commitment_policy)}
+
+    compute_decryption_cache_id(
+      effective_partition_id(cmm, shape),
+      request.algorithm_suite,
+      request.encrypted_data_keys,
+      request.encryption_context
+    )
+  end
+
+  defp effective_partition_id(cmm, request_shape) do
+    identity = {:v1, cmm.partition_id, cmm_chain_identity(cmm.underlying_cmm), request_shape}
+    :crypto.hash(:sha384, :erlang.term_to_binary(identity, [:deterministic]))
+  end
+
+  defp cmm_chain_identity(%Default{}), do: :default
+
+  defp cmm_chain_identity(%RequiredEncryptionContext{} = cmm),
+    do:
+      {:required_encryption_context, cmm.required_encryption_context_keys,
+       cmm_chain_identity(cmm.underlying_cmm)}
+
+  defp cmm_chain_identity(%__MODULE__{} = cmm),
+    do: {:caching, cmm_chain_identity(cmm.underlying_cmm)}
+
+  defp cmm_chain_identity(%module{}), do: {:unsupported, module}
 
   # Cache ID Computation (Appendix A formulas)
 
@@ -288,9 +363,7 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
     case LocalCache.get_cache_entry(cmm.cache, cache_id) do
       {:ok, entry} ->
         # Decryption doesn't track usage limits
-        reader_keys = reader_required_keys(cmm.underlying_cmm)
-
-        if bound_context_agrees?(entry.materials, request, reader_keys) do
+        if bound_context_agrees?(entry.materials, request) do
           {:ok, entry.materials}
         else
           fetch_and_cache_decryption_materials(cmm, cache_id, request)
@@ -310,12 +383,10 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   #   * every reproduced value for a stored key equals the stored value;
   #   * every key in the entry's required set, stored or not, is reproduced
   #     (a cold read through the default CMM or a required-context CMM
-  #     refuses or fails without it);
-  #   * every key the READING CMM requires is reproduced. The entry's
-  #     required set is the one the CMM that filled it computed, and a
-  #     Caching CMM over another configuration (a default CMM sharing the
-  #     cache and partition id) fills it without this reader's keys; a
-  #     cold read through this reader refuses with the missing-keys reason;
+  #     refuses or fails without it). The entry was filled through this
+  #     CMM's own chain (the chain is part of the cache identity), so that
+  #     set already holds every key a required-context CMM in the chain
+  #     configures;
   #   * the reproduced pairs the header does not store are exactly the
   #     pairs the cached entry bound outside the header (its required keys
   #     absent from the stored context, with their values).
@@ -325,9 +396,8 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
   # read that populated the cache (a keyring that does not bind the context
   # unwraps under any claim; header authentication fails later) never makes
   # a correct reader fail, and a disagreeing reader is refused by the same
-  # unwrap or header authentication as on a cold read. The cache id, and so
-  # the hit rate for agreeing readers, is unchanged.
-  defp bound_context_agrees?(materials, request, reader_keys) do
+  # unwrap or header authentication as on a cold read.
+  defp bound_context_agrees?(materials, request) do
     reproduced = Map.get(request, :reproduced_encryption_context) || %{}
     stored = request.encryption_context
 
@@ -341,25 +411,11 @@ defmodule AwsEncryptionSdk.Cmm.Caching do
       )
 
     required_reproduced? =
-      Enum.all?(
-        (materials.required_encryption_context_keys || []) ++ reader_keys,
-        &Map.has_key?(reproduced, &1)
-      )
+      Enum.all?(materials.required_encryption_context_keys || [], &Map.has_key?(reproduced, &1))
 
     stored_agrees? and required_reproduced? and
       Map.drop(reproduced, Map.keys(stored)) == bound_outside_header
   end
-
-  # The keys a CMM chain refuses a decrypt without: each required-context
-  # CMM's configured keys, read through nested Caching CMMs. The default
-  # CMM configures none.
-  defp reader_required_keys(%__MODULE__{underlying_cmm: underlying}),
-    do: reader_required_keys(underlying)
-
-  defp reader_required_keys(%RequiredEncryptionContext{} = cmm),
-    do: cmm.required_encryption_context_keys ++ reader_required_keys(cmm.underlying_cmm)
-
-  defp reader_required_keys(_cmm), do: []
 
   defp fetch_and_cache_decryption_materials(cmm, cache_id, request) do
     with {:ok, materials} <- call_underlying_cmm_decrypt(cmm.underlying_cmm, request) do

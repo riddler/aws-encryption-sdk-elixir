@@ -49,6 +49,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32 bytes read as a P-384 scalar. The Default CMM generates the signing
   key on the suite's curve, so a client that encrypts through a CMM sees
   no change.
+- Fixes `AwsEncryptionSdk.Cmm.Caching` serving an entry filled under a
+  different materials-shaping configuration: the Caching CMM's cache key
+  includes the materials-shaping configuration (the underlying CMM chain
+  with each required-context CMM's keys, the request's commitment policy
+  and, on encrypt, the required keys the request carries), so a
+  differently configured CMM sharing the cache and partition id misses and
+  refetches, and a hit always answers as a cold read would. Before, Caching
+  CMMs over the default CMM and over the required-context CMM shared one
+  entry, and a read reproducing every required key answered from the other
+  side's entry: a message written before 1.1.0 failed
+  `:header_authentication_failed` where a cold read decrypts, and a message
+  written without required keys (every pair stored in the header)
+  decrypted where a cold read refuses. That second read now refuses with
+  `{:error, :header_authentication_failed}`, as a cold read through the
+  required-context CMM does. Likewise, for a client under
+  `:require_encrypt_require_decrypt` sharing a Caching CMM with a
+  `:forbid_encrypt_allow_decrypt` client, an entry the permissive client
+  filled no longer answers: a stream encrypt writes the committed default
+  suite instead of the cached non-committed one, a one-shot encrypt
+  succeeds instead of refusing that entry with
+  `:commitment_policy_requires_committed_suite`, and a stream decrypt of a
+  non-committed message raises the RuntimeError naming that reason, as a
+  cold read does, instead of decrypting.
+  Identically configured Caching CMMs share entries as before.
 
 ## [1.2.1] - 2026-10-12
 
