@@ -192,6 +192,11 @@ jobs:
       - name: Upload coverage to Codecov
         if: matrix.coverage
         uses: codecov/codecov-action@v4
+        # The CI role's credentials are for the tests; blank them here.
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
         with:
           files: cover/excoveralls.json
           fail_ci_if_error: true

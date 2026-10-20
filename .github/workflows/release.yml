@@ -190,6 +190,10 @@ jobs:
       - name: Publish to Hex
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+          # The CI role's credentials are for the tests; blank them here.
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
         run: mix hex.publish --yes
 
       - name: Print the published version's address
