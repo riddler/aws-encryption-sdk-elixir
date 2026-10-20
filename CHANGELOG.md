@@ -63,7 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written without required keys (every pair stored in the header)
   decrypted where a cold read refuses. That second read now refuses with
   `{:error, :header_authentication_failed}`, as a cold read through the
-  required-context CMM does. Likewise, for a client under
+  required-context CMM does. On encrypt, two answers change the same way,
+  and a hit now answers as a cold read would: a Caching CMM over the
+  required-context CMM, after the default side filled the entry, was
+  served that entry (no required keys) and wrote a message storing the
+  required keys in its header; it now misses and writes them out of the
+  header, as a cold read does. And a required-context CMM wrapping a
+  Caching CMM that a bare client filled returned
+  `{:error, {:required_keys_not_in_materials, keys}}`; it now succeeds, as
+  a cold read does. Likewise, for a client under
   `:require_encrypt_require_decrypt` sharing a Caching CMM with a
   `:forbid_encrypt_allow_decrypt` client, an entry the permissive client
   filled no longer answers: a stream encrypt writes the committed default
