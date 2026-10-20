@@ -253,7 +253,8 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
   ## Returns
 
   - `true` if signature is valid
-  - `false` if signature is invalid
+  - `false` if signature is invalid, including for a public key that is
+    not a point on `curve`
 
   ## Examples
 
@@ -270,8 +271,44 @@ defmodule AwsEncryptionSdk.Crypto.ECDSA do
              is_binary(public_key) do
     # Normalize public key to uncompressed format if needed
     normalized_key = normalize_public_key(public_key, curve)
-    :crypto.verify(:ecdsa, hash_for_curve(curve), message, signature, [normalized_key, curve])
+
+    try do
+      :crypto.verify(:ecdsa, hash_for_curve(curve), message, signature, [normalized_key, curve])
+    rescue
+      # :crypto raises on a key it cannot read as a point on the curve
+      _error in [ArgumentError, ErlangError] -> false
+    end
   end
+
+  @private_key_sizes %{secp256r1: 32, secp384r1: 48}
+
+  @doc false
+  # Raises ArgumentError when a signed suite's signing key has the size of
+  # a private key on the other signed curve. Called by Encrypt.encrypt/3
+  # and Stream.Encryptor.init/2 before anything is encrypted. A key of
+  # another size is left to :crypto, as before.
+  @spec check_signing_key!(AwsEncryptionSdk.AlgorithmSuite.t(), binary() | nil) :: :ok
+  def check_signing_key!(%{signature_algorithm: algorithm} = suite, signing_key)
+      when algorithm in [:ecdsa_p256, :ecdsa_p384] and is_binary(signing_key) do
+    curve = curve_for_suite(suite)
+
+    case Enum.find(@private_key_sizes, fn {other, size} ->
+           other != curve and byte_size(signing_key) == size
+         end) do
+      nil ->
+        :ok
+
+      {other, size} ->
+        raise ArgumentError,
+              "the signing key is not a #{curve} private key, the curve algorithm suite " <>
+                "#{suite_hex(suite)} signs on: it is #{size} bytes, the size of a " <>
+                "#{other} private key"
+    end
+  end
+
+  def check_signing_key!(_suite, _signing_key), do: :ok
+
+  defp suite_hex(%{id: id}), do: "0x" <> String.pad_leading(Integer.to_string(id, 16), 4, "0")
 
   @doc """
   Normalizes a public key to uncompressed format.

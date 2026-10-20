@@ -21,6 +21,7 @@ defmodule AwsEncryptionSdk.SigningSuitesTest do
   alias AwsEncryptionSdk.Decrypt
   alias AwsEncryptionSdk.Format.{Header, Message}
   alias AwsEncryptionSdk.Keyring.RawAes
+  alias AwsEncryptionSdk.Materials.EncryptionMaterials
   alias AwsEncryptionSdk.Stream
   alias AwsEncryptionSdk.Stream.{Decryptor, Encryptor}
 
@@ -211,6 +212,82 @@ defmodule AwsEncryptionSdk.SigningSuitesTest do
     test "the one-shot decrypt gives the same answer", ctx do
       assert {:error, :signature_verification_failed} =
                Decrypt.decrypt(ctx.ciphertext, ctx.wrong_curve)
+    end
+  end
+
+  describe "a caller-supplied signing key" do
+    # Materials as a caller assembles them, outside a CMM: a key pair
+    # generated on `curve`, its public key in the context, and the data key
+    # from the keyring.
+    defp caller_materials(keyring, suite, curve) do
+      {private_key, public_key} = ECDSA.generate_key_pair(curve)
+      context = Map.put(@context, @public_key, ECDSA.encode_public_key(public_key))
+
+      {:ok, materials} =
+        RawAes.wrap_key(
+          keyring,
+          EncryptionMaterials.new_for_encrypt(suite, context, signing_key: private_key)
+        )
+
+      materials
+    end
+
+    # {suite id, the suite's curve, the other curve, commitment policy}
+    @mismatches [
+      {0x0214, :secp256r1, :secp384r1, :forbid_encrypt_allow_decrypt},
+      {0x0346, :secp384r1, :secp256r1, :forbid_encrypt_allow_decrypt},
+      {0x0378, :secp384r1, :secp256r1, :forbid_encrypt_allow_decrypt},
+      {0x0578, :secp384r1, :secp256r1, :require_encrypt_require_decrypt}
+    ]
+
+    for {id, curve, other, policy} <- @mismatches do
+      @id id
+      @curve curve
+      @other other
+      @policy policy
+      @hex "0x" <> String.pad_leading(Integer.to_string(id, 16), 4, "0")
+      @message ~r/^the signing key is not a #{curve} private key, the curve algorithm suite #{@hex} signs on: it is \d+ bytes, the size of a #{other} private key$/
+
+      # Sabotage: in Encrypt.encrypt/3, drop the ECDSA.check_signing_key!/2
+      # step -> 0x0214 raises ErlangError from :crypto and the P-384 suites
+      # answer {:ok, _}: a P-256 key signs on P-384 without complaint.
+      test "#{@hex}: a #{other} key raises ArgumentError one-shot", ctx do
+        suite = AlgorithmSuite.by_id(@id) |> elem(1)
+        materials = caller_materials(ctx.keyring, suite, @other)
+
+        assert_raise ArgumentError, @message, fn ->
+          AwsEncryptionSdk.encrypt(materials, ctx.plaintext, frame_length: 64)
+        end
+      end
+
+      # Sabotage: in Stream.Encryptor.init/2, drop the
+      # ECDSA.check_signing_key!/2 step -> init answers {:ok, _}.
+      test "#{@hex}: a #{other} key raises ArgumentError streaming, before any byte", ctx do
+        suite = AlgorithmSuite.by_id(@id) |> elem(1)
+        materials = caller_materials(ctx.keyring, suite, @other)
+
+        assert_raise ArgumentError, @message, fn ->
+          Encryptor.init(materials, frame_length: 64)
+        end
+      end
+
+      test "#{@hex}: a #{curve} key signs, and the message decrypts", ctx do
+        suite = AlgorithmSuite.by_id(@id) |> elem(1)
+        materials = caller_materials(ctx.keyring, suite, @curve)
+
+        {:ok, %{ciphertext: one_shot}} =
+          AwsEncryptionSdk.encrypt(materials, ctx.plaintext, frame_length: 64)
+
+        {:ok, enc} = Encryptor.init(materials, frame_length: 64)
+        {:ok, enc, header} = Encryptor.start(enc)
+        {:ok, enc, frames} = Encryptor.update(enc, ctx.plaintext)
+        {:ok, _enc, final} = Encryptor.finalize(enc)
+
+        for ciphertext <- [one_shot, header <> frames <> final],
+            reader <- [:one_shot, :streaming] do
+          assert {:ok, ctx.plaintext} == read(reader, ctx.keyring, @policy, ciphertext)
+        end
+      end
     end
   end
 end

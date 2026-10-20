@@ -94,7 +94,8 @@ defmodule AwsEncryptionSdk do
   integrates with the CMM layer.
 
   For backward compatibility, also accepts EncryptionMaterials as the first argument
-  (delegates to `encrypt_with_materials/3`).
+  (delegates to `encrypt_with_materials/3`, which raises `ArgumentError` for a
+  signing key not on the signed suite's curve).
 
   ## Parameters
 
@@ -171,6 +172,12 @@ defmodule AwsEncryptionSdk do
 
   - `{:ok, result}` - Encryption succeeded
   - `{:error, reason}` - Encryption failed
+
+  ## Raises
+
+  - `ArgumentError` - The suite is signed and the materials' `:signing_key`
+    is not a private key for the curve the suite signs on; see
+    `AwsEncryptionSdk.Encrypt.encrypt/3`.
 
   ## Examples
 
