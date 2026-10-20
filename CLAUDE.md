@@ -237,10 +237,11 @@ mix dialyzer
 
 # Documentation
 mix docs
-
-# Publish to Hex
-mix hex.publish
 ```
+
+Publishing to Hex runs from `.github/workflows/release.yml` when a
+`v*.*.*` tag is pushed. Nobody runs the Hex publish command by hand;
+the tag push is the only publish path (see `.claude/commands/release.md`).
 
 ## Development Milestones
 
