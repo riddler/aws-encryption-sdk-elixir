@@ -22,6 +22,7 @@ defmodule AwsEncryptionSdk.Stream do
   """
 
   alias AwsEncryptionSdk.Client
+  alias AwsEncryptionSdk.Cmm.Behaviour, as: CmmBehaviour
   alias AwsEncryptionSdk.Cmm.Caching
   alias AwsEncryptionSdk.Cmm.Default
   alias AwsEncryptionSdk.Cmm.RequiredEncryptionContext
@@ -37,7 +38,12 @@ defmodule AwsEncryptionSdk.Stream do
 
   - `:encryption_context` - Encryption context (default: `%{}`)
   - `:frame_length` - Frame size in bytes (default: 4096)
-  - `:algorithm_suite` - Algorithm suite to use (default: from client)
+  - `:algorithm_suite` - Algorithm suite to use (default: the CMM's default
+    for the client's commitment policy). Checked against the commitment
+    policy before the CMM is called, as `AwsEncryptionSdk.Client.encrypt/3`
+    checks it; a suite the policy forbids raises the RuntimeError the
+    stream raises for any initialization error, naming the reason
+    `Client.encrypt/3` returns.
   - `:plaintext_length` - Total plaintext size in bytes, when known upfront.
     Required for the Caching CMM to cache materials for this stream: without
     it the `max_bytes` limit cannot be enforced, so a Caching CMM bypasses
@@ -89,10 +95,12 @@ defmodule AwsEncryptionSdk.Stream do
     encryption_context = Keyword.get(opts, :encryption_context, %{})
     frame_length = Keyword.get(opts, :frame_length, 4096)
     plaintext_length = Keyword.get(opts, :plaintext_length)
+    requested_suite = Keyword.get(opts, :algorithm_suite)
 
     request = %{
       encryption_context: encryption_context,
-      commitment_policy: client.commitment_policy
+      commitment_policy: client.commitment_policy,
+      algorithm_suite: requested_suite
     }
 
     # Only declare the length when the caller knows it - an absent key tells
@@ -104,9 +112,19 @@ defmodule AwsEncryptionSdk.Stream do
         request
       end
 
-    with {:ok, materials} <- call_cmm_get_encryption_materials(client.cmm, request) do
+    with :ok <- validate_requested_suite(requested_suite, client.commitment_policy),
+         {:ok, materials} <- call_cmm_get_encryption_materials(client.cmm, request) do
       Encryptor.init(materials, frame_length: frame_length)
     end
+  end
+
+  # A requested suite is checked against the commitment policy before the
+  # CMM is called, the check Client.encrypt/3 makes, so the stream refuses
+  # it with the same reason and a cached entry never answers for it
+  defp validate_requested_suite(nil, _policy), do: :ok
+
+  defp validate_requested_suite(suite, policy) do
+    CmmBehaviour.validate_commitment_policy_for_encrypt(suite, policy)
   end
 
   defp encrypt_chunk(plaintext_chunk, {:start, enc}) do
