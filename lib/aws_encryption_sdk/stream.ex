@@ -73,6 +73,11 @@ defmodule AwsEncryptionSdk.Stream do
   Returns a Stream that emits `{plaintext, status}` tuples where status is
   `:verified` or `:unverified`.
 
+  Framed and non-framed messages are both read. A non-framed message's
+  plaintext is emitted whole, as one `:verified` tuple, once the body's
+  authentication tag (and, on a signed suite, the signature) verifies; see
+  `AwsEncryptionSdk.Stream.Decryptor`.
+
   ## Options
 
   - `:encryption_context` - Reproduced context to validate (optional)

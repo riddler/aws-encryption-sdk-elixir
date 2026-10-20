@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`:commitment_policy_requires_committed_suite` or
   `:commitment_policy_forbids_committed_suite`). Without the option
   nothing changes.
+- Fixes `AwsEncryptionSdk.Stream.decrypt/3` and
+  `AwsEncryptionSdk.Stream.Decryptor` refusing non-framed messages
+  (content type 0x01, which other SDKs may write) on every suite: the
+  stream now reads one to the plaintext the one-shot decrypt returns.
+  Before, the decryptor read the body as a frame and refused it, typically
+  with `{:error, {:sequence_mismatch, 1, n}}`, `n` read from the IV's
+  first four bytes, and the stream raised its RuntimeError naming that
+  reason.
+  The body's one authentication tag covers the whole body, so the
+  plaintext is emitted whole, as one `:verified` tuple, only after the
+  tag (and, on a signed suite, the footer's signature) verifies; the
+  decryptor buffers the body up to the content length it declares, and
+  refuses a declared length above the format's limit (2^36 - 32 bytes)
+  with `{:error, :content_too_large}`. Framed messages are read as
+  before.
 
 ## [1.2.1] - 2026-10-12
 

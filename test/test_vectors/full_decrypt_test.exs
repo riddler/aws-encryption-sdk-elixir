@@ -444,10 +444,9 @@ defmodule AwsEncryptionSdk.TestVectors.FullDecryptTest do
     @tag :full_test_vectors
     @tag :raw_aes
     @tag timeout: 300_000
-    # The streaming decrypt reads framed messages only (on every suite), so
-    # the non-framed 0x0214 vectors are read one-shot only: an excluded set
-    # of exactly 12, counted below.
-    test "every single raw AES 0x0214 vector decrypts one-shot; every framed one streaming",
+    # Every 0x0214 vector, framed and non-framed, is read one-shot and
+    # streaming; the counts below pin the set.
+    test "every single raw AES 0x0214 vector decrypts one-shot and streaming",
          %{harness: harness} do
       skip_if_no_harness(harness)
       vectors = p256_raw_aes_vectors(harness)
@@ -464,12 +463,110 @@ defmodule AwsEncryptionSdk.TestVectors.FullDecryptTest do
             do: {test_id, result}
 
       streaming_failures =
-        for test_id <- framed,
+        for {test_id, _content_type} <- vectors,
             (result = run_streaming_decrypt_test(harness, test_id)) != :ok,
             do: {test_id, result}
 
       assert one_shot_failures == []
       assert streaming_failures == []
+    end
+  end
+
+  # ==========================================================================
+  # Non-Framed Vectors, Streaming
+  # ==========================================================================
+
+  # The non-framed vectors among `tests`, each with its suite id.
+  defp non_framed_vectors(tests, harness) do
+    Enum.flat_map(tests, fn {test_id, _test} ->
+      {:ok, ciphertext} = TestVectorHarness.load_ciphertext(harness, test_id)
+      {:ok, message, _rest} = TestVectorHarness.parse_ciphertext(ciphertext)
+
+      if message.header.content_type == :non_framed,
+        do: [{test_id, message.header.algorithm_suite.id}],
+        else: []
+    end)
+  end
+
+  defp streaming_failures(vectors, harness) do
+    for {test_id, _suite_id} <- vectors,
+        (result = run_streaming_decrypt_test(harness, test_id)) != :ok,
+        do: {test_id, result}
+  end
+
+  # Every suite in the manifest carries non-framed vectors; each filter below
+  # is the one its one-shot suite above runs, narrowed to non-framed messages.
+  describe "non-framed vectors, streaming" do
+    @tag :full_test_vectors
+    @tag :raw_aes
+    @tag timeout: 300_000
+    # Sabotage: in Stream.Decryptor, drop the non-framed process_buffer
+    # clause -> every vector here raises {:sequence_mismatch, 1, 0}.
+    test "every non-framed single raw AES vector decrypts streaming", %{harness: harness} do
+      skip_if_no_harness(harness)
+
+      vectors =
+        harness
+        |> TestVectorHarness.success_tests()
+        |> TestVectorHarness.raw_key_tests()
+        |> TestVectorHarness.by_encryption_algorithm("aes")
+        |> TestVectorHarness.single_key_tests()
+        |> non_framed_vectors(harness)
+
+      by_suite = Enum.frequencies_by(vectors, fn {_test_id, suite_id} -> suite_id end)
+
+      assert length(vectors) == 132
+      assert map_size(by_suite) == 11
+      assert Enum.all?(by_suite, fn {_suite_id, count} -> count == 12 end)
+      assert by_suite[0x0178] == 12
+      assert by_suite[0x0378] == 12
+
+      assert streaming_failures(vectors, harness) == []
+    end
+
+    @tag :full_test_vectors
+    @tag :raw_rsa
+    @tag timeout: 900_000
+    test "every non-framed decryptable single raw RSA vector decrypts streaming",
+         %{harness: harness} do
+      skip_if_no_harness(harness)
+
+      vectors =
+        harness
+        |> TestVectorHarness.success_tests()
+        |> TestVectorHarness.raw_key_tests()
+        |> TestVectorHarness.by_encryption_algorithm("rsa")
+        |> TestVectorHarness.single_key_tests()
+        |> filter_decryptable_rsa(harness)
+        |> non_framed_vectors(harness)
+
+      by_suite = Enum.frequencies_by(vectors, fn {_test_id, suite_id} -> suite_id end)
+
+      assert length(vectors) == 220
+      assert map_size(by_suite) == 11
+
+      assert streaming_failures(vectors, harness) == []
+    end
+
+    @tag :full_test_vectors
+    @tag :multi_keyring
+    @tag timeout: 300_000
+    test "every non-framed multi-keyring vector decrypts streaming", %{harness: harness} do
+      skip_if_no_harness(harness)
+
+      vectors =
+        harness
+        |> TestVectorHarness.success_tests()
+        |> TestVectorHarness.raw_key_tests()
+        |> TestVectorHarness.multi_key_tests()
+        |> non_framed_vectors(harness)
+
+      by_suite = Enum.frequencies_by(vectors, fn {_test_id, suite_id} -> suite_id end)
+
+      assert length(vectors) == 220
+      assert map_size(by_suite) == 11
+
+      assert streaming_failures(vectors, harness) == []
     end
   end
 
