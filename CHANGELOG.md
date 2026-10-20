@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixes `AwsEncryptionSdk.Stream.encrypt/3` ignoring its documented
+  `:algorithm_suite` option: the stream now writes the suite the option
+  names, checked against the client's commitment policy before the CMM is
+  called, as `AwsEncryptionSdk.Client.encrypt/3` checks it. Before, the
+  option was ignored and the stream wrote the policy's default suite
+  (0x0578, or 0x0378 under `:forbid_encrypt_allow_decrypt`). A suite the
+  policy forbids raises the RuntimeError the stream raises for any
+  initialization error, naming the reason `Client.encrypt/3` returns
+  (`:commitment_policy_requires_committed_suite` or
+  `:commitment_policy_forbids_committed_suite`). Without the option
+  nothing changes.
+
 ## [1.2.1] - 2026-10-12
 
 ### Fixed
