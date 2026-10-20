@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-20
+
 ### Fixed
 - Fixes `AwsEncryptionSdk.Stream.encrypt/3` ignoring its documented
   `:algorithm_suite` option: the stream now writes the suite the option
@@ -400,7 +402,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic encryption and decryption operations with AES-GCM and key commitment (#10)
 - Test vector harness for AWS Encryption SDK compatibility testing (#13)
 
-[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/riddler/aws-encryption-sdk-elixir/compare/v1.0.1...v1.1.0
